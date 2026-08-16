@@ -8,5 +8,5 @@
 // überhaupt lesen/schreiben.
 // ============================================================================
 
-export const SUPABASE_URL = "https://DEIN-PROJEKT.supabase.co";
-export const SUPABASE_ANON_KEY = "DEIN-ANON-KEY";
+export const SUPABASE_URL = "https://zntkbvubuxlrzuxiufbi.supabase.co";
+export const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpudGtidnVidXhscnp1eGl1ZmJpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY4OTQwMTQsImV4cCI6MjEwMjQ3MDAxNH0.x3H0_HKciniuB7GmgWvvNph7GdJkZQMbC0XBBmhpNvk";
