@@ -62,25 +62,49 @@ function showLogin() {
   renderLogin(container);
 }
 
+function showFatalError(err) {
+  console.error("Startfehler:", err);
+  document.body.innerHTML = `
+    <main class="app-main app-main--auth">
+      <div class="auth-screen">
+        <div class="auth-card">
+          <h1>Start fehlgeschlagen</h1>
+          <p class="text-muted">
+            Die App konnte sich nicht mit Supabase verbinden. Meist liegt es an
+            falschen Werten in <code>js/config.js</code> (SUPABASE_URL /
+            SUPABASE_ANON_KEY) oder daran, dass das Datenbankschema
+            (schema.sql) noch nicht ausgeführt wurde.
+          </p>
+          <p class="form-error">${(err && err.message) || String(err)}</p>
+        </div>
+      </div>
+    </main>
+  `;
+}
+
 async function bootstrap() {
-  currentSession = await getSession();
-  if (currentSession) {
-    showApp();
-  } else {
-    showLogin();
-  }
-
-  onAuthStateChange((session) => {
-    const wasLoggedIn = Boolean(currentSession);
-    const isLoggedIn = Boolean(session);
-    currentSession = session;
-
-    if (!wasLoggedIn && isLoggedIn) {
+  try {
+    currentSession = await getSession();
+    if (currentSession) {
       showApp();
-    } else if (wasLoggedIn && !isLoggedIn) {
+    } else {
       showLogin();
     }
-  });
+
+    onAuthStateChange((session) => {
+      const wasLoggedIn = Boolean(currentSession);
+      const isLoggedIn = Boolean(session);
+      currentSession = session;
+
+      if (!wasLoggedIn && isLoggedIn) {
+        showApp();
+      } else if (wasLoggedIn && !isLoggedIn) {
+        showLogin();
+      }
+    });
+  } catch (err) {
+    showFatalError(err);
+  }
 }
 
 bootstrap();
