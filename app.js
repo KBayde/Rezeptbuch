@@ -1,0 +1,95 @@
+import { getSession, onAuthStateChange, signOut } from "./db.js";
+import { route, startRouter, navigate } from "./router.js";
+import { renderLogin } from "./views/login.js";
+import { renderRecipeList } from "./views/recipeList.js";
+import { renderRecipeForm } from "./views/recipeForm.js";
+import { renderRecipeDetail } from "./views/recipeDetail.js";
+
+let currentSession = null;
+
+function renderShell() {
+  document.body.innerHTML = `
+    <div class="app-shell">
+      <header class="topbar">
+        <a href="#/" class="brand">🍲 Unser Rezeptbuch</a>
+        <button id="logout-btn" class="btn btn-ghost btn-small">Abmelden</button>
+      </header>
+      <main id="app" class="app-main"></main>
+    </div>
+  `;
+  document.getElementById("logout-btn").addEventListener("click", async () => {
+    await signOut();
+  });
+}
+
+function renderAuthOnly() {
+  document.body.innerHTML = `<main id="app" class="app-main app-main--auth"></main>`;
+}
+
+function registerRoutes() {
+  route("/", async () => {
+    const container = document.getElementById("app");
+    await renderRecipeList(container);
+  });
+  route("/rezepte/neu", async () => {
+    const container = document.getElementById("app");
+    await renderRecipeForm(container);
+  });
+  route("/rezepte/:id/bearbeiten", async (params) => {
+    const container = document.getElementById("app");
+    await renderRecipeForm(container, { id: params.id });
+  });
+  route("/rezepte/:id", async (params) => {
+    const container = document.getElementById("app");
+    await renderRecipeDetail(container, { id: params.id });
+  });
+}
+
+let routerStarted = false;
+
+function showApp() {
+  renderShell();
+  if (!routerStarted) {
+    registerRoutes();
+    routerStarted = true;
+  }
+  startRouter();
+}
+
+function showLogin() {
+  renderAuthOnly();
+  const container = document.getElementById("app");
+  renderLogin(container);
+}
+
+async function bootstrap() {
+  currentSession = await getSession();
+  if (currentSession) {
+    showApp();
+  } else {
+    showLogin();
+  }
+
+  onAuthStateChange((session) => {
+    const wasLoggedIn = Boolean(currentSession);
+    const isLoggedIn = Boolean(session);
+    currentSession = session;
+
+    if (!wasLoggedIn && isLoggedIn) {
+      showApp();
+    } else if (wasLoggedIn && !isLoggedIn) {
+      showLogin();
+    }
+  });
+}
+
+bootstrap();
+
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("./sw.js").catch(() => {
+      // Offline-Unterstützung ist ein "nice to have" – ein Fehler hier
+      // darf die App nicht blockieren.
+    });
+  });
+}
