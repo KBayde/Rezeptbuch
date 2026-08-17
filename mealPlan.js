@@ -1,7 +1,7 @@
 import {
   listRecipes,
   listMealPlanEntries,
-  addMealPlanEntry,
+  addMealPlanEntryForDays,
   removeMealPlanEntry,
   updateMealPlanEntryServings,
   generateShoppingList,
@@ -13,12 +13,16 @@ import {
   formatDateISO,
   formatDateDisplay,
   WEEKDAY_LABELS_DE,
+  MEAL_TYPES,
 } from "./utils.js";
 import { navigate } from "./router.js";
 
 export async function renderMealPlan(container) {
   const today = new Date();
   let currentWeekStart = getWeekStart(today);
+  // "Arming" eines Zwei-Tage-Eintrags: einmal aktivieren, gilt für die
+  // nächste Rezept-Auswahl, dann automatisch wieder aus.
+  let armTwoDays = false;
 
   container.innerHTML = `
     <div class="page-header">
@@ -33,7 +37,16 @@ export async function renderMealPlan(container) {
       </div>
     </div>
 
-    <div id="week-grid" class="week-grid"></div>
+    <div class="two-day-toggle-row">
+      <button id="two-day-toggle" class="chip chip-toggle" type="button" title="Bei der nächsten Rezeptauswahl auch für den Folgetag einplanen">
+        🗓️ Nächste Auswahl auch für Folgetag planen
+      </button>
+      <span id="two-day-hint" class="text-small text-muted" hidden>Aktiv – wähle jetzt ein Rezept aus.</span>
+    </div>
+
+    <div class="timetable-scroll">
+      <div id="timetable" class="timetable"></div>
+    </div>
 
     <div class="week-footer">
       <a href="#/einkaufsliste" class="btn btn-secondary">Einkaufsliste ansehen</a>
@@ -43,71 +56,116 @@ export async function renderMealPlan(container) {
     </div>
   `;
 
-  const weekGrid = container.querySelector("#week-grid");
+  const timetable = container.querySelector("#timetable");
   const rangeLabel = container.querySelector("#week-range-label");
   const shoppingBtn = container.querySelector("#make-shopping-list-btn");
+  const twoDayToggle = container.querySelector("#two-day-toggle");
+  const twoDayHint = container.querySelector("#two-day-hint");
 
   let allRecipes = [];
   try {
     allRecipes = await listRecipes();
   } catch (err) {
-    weekGrid.innerHTML = `<p class="form-error">Rezepte konnten nicht geladen werden: ${escapeHtml(
+    timetable.innerHTML = `<p class="form-error">Rezepte konnten nicht geladen werden: ${escapeHtml(
       err.message
     )}</p>`;
     return;
   }
 
+  function setArmTwoDays(value) {
+    armTwoDays = value;
+    twoDayToggle.classList.toggle("chip-toggle--active", value);
+    twoDayHint.hidden = !value;
+  }
+
+  twoDayToggle.addEventListener("click", () => setArmTwoDays(!armTwoDays));
+
   function recipeOptionsHtml() {
     return allRecipes.map((r) => `<option value="${r.id}">${escapeHtml(r.title)}</option>`).join("");
   }
 
-  function entryHtml(entry) {
+  function entryChipHtml(entry) {
     return `
-      <div class="day-entry" data-entry-id="${entry.id}">
-        <a href="#/rezepte/${entry.recipeId}" class="day-entry-title">${escapeHtml(entry.recipeTitle)}</a>
-        <div class="day-entry-meta">
+      <div class="meal-entry" data-entry-id="${entry.id}">
+        <a href="#/rezepte/${entry.recipeId}" class="meal-entry-title">${escapeHtml(entry.recipeTitle)}</a>
+        <div class="meal-entry-meta">
           <input
-            type="number" min="1" step="1" class="day-entry-servings"
+            type="number" min="1" step="1" class="meal-entry-servings"
             data-entry-id="${entry.id}" value="${entry.servings}"
           />
-          <span class="text-small text-muted">Port.</span>
-          <button class="row-remove day-entry-remove" data-entry-id="${entry.id}" title="Entfernen" type="button">×</button>
+          <button class="meal-entry-remove" data-entry-id="${entry.id}" title="Entfernen" type="button">×</button>
         </div>
       </div>
     `;
   }
 
-  function dayCardHtml(iso, weekdayLabel, date, entries, isToday) {
-    const entriesHtml = entries.length
-      ? entries.map(entryHtml).join("")
-      : `<p class="day-empty text-small text-muted">Kein Rezept geplant</p>`;
-
+  function cellHtml(iso, mealTypeKey, entries) {
+    const entriesHtml = entries.map(entryChipHtml).join("");
     return `
-      <div class="day-card ${isToday ? "day-card--today" : ""}">
-        <div class="day-card-header">
-          <span class="day-name">${weekdayLabel}</span>
-          <span class="day-date text-muted">${formatDateDisplay(date)}</span>
-        </div>
-        <div class="day-entries">${entriesHtml}</div>
-        <select class="day-add-select select" data-date="${iso}">
-          <option value="">+ Rezept hinzufügen…</option>
+      <div class="timetable-cell" data-date="${iso}" data-meal-type="${mealTypeKey}">
+        <div class="meal-entries">${entriesHtml}</div>
+        <select class="meal-add-select" data-date="${iso}" data-meal-type="${mealTypeKey}">
+          <option value="">+ Rezept…</option>
           ${recipeOptionsHtml()}
         </select>
       </div>
     `;
   }
 
-  function wireDayCards() {
-    weekGrid.querySelectorAll(".day-add-select").forEach((select) => {
+  function buildTimetable(entries) {
+    const byKey = {};
+    for (const e of entries) {
+      const key = `${e.date}|${e.mealType}`;
+      (byKey[key] ||= []).push(e);
+    }
+
+    const todayIso = formatDateISO(today);
+    const dayIsos = Array.from({ length: 7 }, (_, i) => formatDateISO(addDays(currentWeekStart, i)));
+
+    let html = `<div class="timetable-corner"></div>`;
+    dayIsos.forEach((iso, i) => {
+      const date = addDays(currentWeekStart, i);
+      const isToday = iso === todayIso;
+      html += `
+        <div class="timetable-daylabel ${isToday ? "timetable-daylabel--today" : ""}">
+          <span class="day-name">${WEEKDAY_LABELS_DE[i]}</span>
+          <span class="day-date text-muted">${formatDateDisplay(date)}</span>
+        </div>
+      `;
+    });
+
+    for (const mt of MEAL_TYPES) {
+      html += `
+        <div class="timetable-mealrow-label timetable-mealrow-label--${mt.key}">
+          <span class="meal-icon">${mt.icon}</span>
+          <span class="meal-label">${mt.label}</span>
+        </div>
+      `;
+      for (const iso of dayIsos) {
+        const cellEntries = byKey[`${iso}|${mt.key}`] || [];
+        html += cellHtml(iso, mt.key, cellEntries);
+      }
+    }
+
+    timetable.innerHTML = html;
+    timetable.style.setProperty("--meal-row-count", MEAL_TYPES.length);
+    wireCells();
+  }
+
+  function wireCells() {
+    timetable.querySelectorAll(".meal-add-select").forEach((select) => {
       select.addEventListener("change", async () => {
         const recipeId = select.value;
         if (!recipeId) return;
         const date = select.dataset.date;
+        const mealType = select.dataset.mealType;
         const recipe = allRecipes.find((r) => r.id === recipeId);
         const servings = recipe ? Math.max(1, Math.round(recipe.servingsBase)) : 2;
+        const dayCount = armTwoDays ? 2 : 1;
         select.disabled = true;
         try {
-          await addMealPlanEntry(date, recipeId, servings);
+          await addMealPlanEntryForDays(date, recipeId, servings, mealType, dayCount);
+          setArmTwoDays(false);
           await load();
         } catch (err) {
           alert("Konnte Rezept nicht hinzufügen: " + err.message);
@@ -116,7 +174,7 @@ export async function renderMealPlan(container) {
       });
     });
 
-    weekGrid.querySelectorAll(".day-entry-remove").forEach((btn) => {
+    timetable.querySelectorAll(".meal-entry-remove").forEach((btn) => {
       btn.addEventListener("click", async () => {
         btn.disabled = true;
         try {
@@ -129,7 +187,7 @@ export async function renderMealPlan(container) {
       });
     });
 
-    weekGrid.querySelectorAll(".day-entry-servings").forEach((input) => {
+    timetable.querySelectorAll(".meal-entry-servings").forEach((input) => {
       input.addEventListener("change", async () => {
         const value = Math.max(1, Number(input.value) || 1);
         input.value = value;
@@ -148,30 +206,18 @@ export async function renderMealPlan(container) {
     const end = formatDateISO(weekEnd);
     rangeLabel.textContent = `${formatDateDisplay(currentWeekStart)} – ${formatDateDisplay(weekEnd)}`;
 
-    weekGrid.innerHTML = `<p class="text-muted">Lade Plan…</p>`;
+    timetable.innerHTML = `<p class="text-muted">Lade Plan…</p>`;
     let entries = [];
     try {
       entries = await listMealPlanEntries(start, end);
     } catch (err) {
-      weekGrid.innerHTML = `<p class="form-error">Plan konnte nicht geladen werden: ${escapeHtml(
+      timetable.innerHTML = `<p class="form-error">Plan konnte nicht geladen werden: ${escapeHtml(
         err.message
       )}</p>`;
       return;
     }
 
-    const entriesByDate = {};
-    for (const e of entries) {
-      (entriesByDate[e.date] ||= []).push(e);
-    }
-
-    const todayIso = formatDateISO(today);
-    weekGrid.innerHTML = Array.from({ length: 7 }, (_, i) => {
-      const date = addDays(currentWeekStart, i);
-      const iso = formatDateISO(date);
-      return dayCardHtml(iso, WEEKDAY_LABELS_DE[i], date, entriesByDate[iso] || [], iso === todayIso);
-    }).join("");
-
-    wireDayCards();
+    buildTimetable(entries);
   }
 
   container.querySelector("#prev-week-btn").addEventListener("click", () => {

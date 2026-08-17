@@ -337,7 +337,7 @@ export async function deleteRecipe(id) {
 // --------------------------- Wochenplan ---------------------------
 
 const MEAL_PLAN_SELECT = `
-  id, planned_date, servings, created_at,
+  id, planned_date, servings, meal_type, created_at,
   recipes ( id, title, servings_base, prep_time_minutes,
     recipe_images ( storage_path, image_type )
   )
@@ -349,6 +349,7 @@ function normalizeMealPlanEntry(row) {
     id: row.id,
     date: row.planned_date,
     servings: Number(row.servings),
+    mealType: row.meal_type,
     recipeId: row.recipes?.id ?? null,
     recipeTitle: row.recipes?.title ?? "(gelöschtes Rezept)",
     recipeServingsBase: row.recipes ? Number(row.recipes.servings_base) : null,
@@ -369,12 +370,33 @@ export async function listMealPlanEntries(startDate, endDate) {
   return data.map(normalizeMealPlanEntry);
 }
 
-export async function addMealPlanEntry(date, recipeId, servings) {
+export async function addMealPlanEntry(date, recipeId, servings, mealType = "mittag") {
   const { data, error } = await supabase
     .from("meal_plan_entries")
-    .insert({ planned_date: date, recipe_id: recipeId, servings })
+    .insert({ planned_date: date, recipe_id: recipeId, servings, meal_type: mealType })
     .select()
     .single();
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * Plant ein Rezept für eine bestimmte Mahlzeit an einem oder mehreren
+ * aufeinanderfolgenden Tagen (z. B. "das gleiche Gericht auch morgen essen").
+ * dayCount = 1 legt nur "date" an, dayCount = 2 zusätzlich den Folgetag.
+ */
+export async function addMealPlanEntryForDays(date, recipeId, servings, mealType, dayCount = 1) {
+  const rows = [];
+  const start = new Date(date);
+  for (let i = 0; i < dayCount; i++) {
+    const d = new Date(start);
+    d.setDate(d.getDate() + i);
+    const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+      d.getDate()
+    ).padStart(2, "0")}`;
+    rows.push({ planned_date: iso, recipe_id: recipeId, servings, meal_type: mealType });
+  }
+  const { data, error } = await supabase.from("meal_plan_entries").insert(rows).select();
   if (error) throw error;
   return data;
 }

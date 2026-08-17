@@ -116,3 +116,11 @@ export function formatDateDisplay(date) {
   const d = new Date(date);
   return d.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" });
 }
+
+/** Mahlzeiten-Slots für den Wochenplan (Stundenplan-Zeilen), in Anzeigereihenfolge. */
+export const MEAL_TYPES = [
+  { key: "fruehstueck", label: "Frühstück", icon: "☀️" },
+  { key: "mittag", label: "Mittag", icon: "🍽️" },
+  { key: "snack", label: "Snack", icon: "🍏" },
+  { key: "abendessen", label: "Abendessen", icon: "🌙" },
+];
