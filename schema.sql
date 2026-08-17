@@ -67,7 +67,6 @@ create table recipes (
   prep_time_minutes integer,
   servings_base numeric not null default 4,
   notes text,
-  image_path text,           -- Pfad im Storage-Bucket "recipe-images", nicht die volle URL
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -105,6 +104,19 @@ create table recipe_tags (
 );
 
 -- ---------------------------------------------------------------------------
+-- Rezeptbilder (mehrere pro Rezept möglich: Titelbild + gescannte Karte)
+-- ---------------------------------------------------------------------------
+create table recipe_images (
+  id uuid primary key default gen_random_uuid(),
+  recipe_id uuid not null references recipes(id) on delete cascade,
+  storage_path text not null check (btrim(storage_path) <> ''),
+  image_type text not null default 'other' check (image_type in ('cover', 'source_front', 'source_back', 'other')),
+  sort_order integer not null default 0 check (sort_order >= 0),
+  created_at timestamptz not null default now()
+);
+create index recipe_images_recipe_id_idx on recipe_images(recipe_id);
+
+-- ---------------------------------------------------------------------------
 -- updated_at automatisch pflegen
 -- ---------------------------------------------------------------------------
 create or replace function set_updated_at()
@@ -130,6 +142,7 @@ alter table recipes enable row level security;
 alter table recipe_steps enable row level security;
 alter table recipe_ingredients enable row level security;
 alter table recipe_tags enable row level security;
+alter table recipe_images enable row level security;
 
 create policy "authenticated read/write units" on units
   for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
@@ -144,6 +157,8 @@ create policy "authenticated read/write recipe_steps" on recipe_steps
 create policy "authenticated read/write recipe_ingredients" on recipe_ingredients
   for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
 create policy "authenticated read/write recipe_tags" on recipe_tags
+  for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
+create policy "authenticated read/write recipe_images" on recipe_images
   for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
 
 -- ---------------------------------------------------------------------------
