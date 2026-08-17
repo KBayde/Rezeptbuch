@@ -1,6 +1,6 @@
-import { getRecipe, deleteRecipe } from "../db.js";
-import { escapeHtml, formatMinutes, formatQuantity, scaleQuantity, SOURCE_TYPE_LABELS } from "../utils.js";
-import { navigate } from "../router.js";
+import { getRecipe, deleteRecipe } from "./db.js";
+import { escapeHtml, formatMinutes, formatQuantity, scaleQuantity, SOURCE_TYPE_LABELS } from "./utils.js";
+import { navigate } from "./router.js";
 
 export async function renderRecipeDetail(container, { id }) {
   container.innerHTML = `<p class="text-muted">Lade Rezept…</p>`;

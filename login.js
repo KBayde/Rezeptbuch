@@ -1,5 +1,5 @@
-import { signIn } from "../db.js";
-import { escapeHtml } from "../utils.js";
+import { signIn } from "./db.js";
+import { escapeHtml } from "./utils.js";
 
 export function renderLogin(container) {
   container.innerHTML = `

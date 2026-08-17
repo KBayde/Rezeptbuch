@@ -1,21 +1,21 @@
 // Sehr einfacher Service Worker: cached nur die App-Hülle (HTML/CSS/JS),
 // damit die App auch bei wackligem Netz schnell startet. Rezeptdaten selbst
 // kommen immer live von Supabase (kein Offline-Datenzugriff in Phase 1).
-const CACHE_NAME = "rezeptbuch-shell-v1";
+const CACHE_NAME = "rezeptbuch-shell-v2";
 const SHELL_FILES = [
   "./",
   "./index.html",
-  "./css/styles.css",
-  "./js/app.js",
-  "./js/router.js",
-  "./js/db.js",
-  "./js/utils.js",
-  "./js/config.js",
-  "./js/supabaseClient.js",
-  "./js/views/login.js",
-  "./js/views/recipeList.js",
-  "./js/views/recipeForm.js",
-  "./js/views/recipeDetail.js",
+  "./styles.css",
+  "./app.js",
+  "./router.js",
+  "./db.js",
+  "./utils.js",
+  "./config.js",
+  "./supabaseClient.js",
+  "./login.js",
+  "./recipeList.js",
+  "./recipeForm.js",
+  "./recipeDetail.js",
   "./manifest.json",
 ];
 

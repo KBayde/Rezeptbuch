@@ -1,9 +1,9 @@
 import { getSession, onAuthStateChange, signOut } from "./db.js";
 import { route, startRouter, navigate } from "./router.js";
-import { renderLogin } from "./views/login.js";
-import { renderRecipeList } from "./views/recipeList.js";
-import { renderRecipeForm } from "./views/recipeForm.js";
-import { renderRecipeDetail } from "./views/recipeDetail.js";
+import { renderLogin } from "./login.js";
+import { renderRecipeList } from "./recipeList.js";
+import { renderRecipeForm } from "./recipeForm.js";
+import { renderRecipeDetail } from "./recipeDetail.js";
 
 let currentSession = null;
 

@@ -5,9 +5,9 @@ import {
   getRecipe,
   createRecipe,
   updateRecipe,
-} from "../db.js";
-import { escapeHtml, SOURCE_TYPE_LABELS } from "../utils.js";
-import { navigate } from "../router.js";
+} from "./db.js";
+import { escapeHtml, SOURCE_TYPE_LABELS } from "./utils.js";
+import { navigate } from "./router.js";
 
 export async function renderRecipeForm(container, { id } = {}) {
   const isEdit = Boolean(id);

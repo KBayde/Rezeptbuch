@@ -1,6 +1,6 @@
-import { listRecipes } from "../db.js";
-import { debounce, escapeHtml, formatMinutes } from "../utils.js";
-import { navigate } from "../router.js";
+import { listRecipes } from "./db.js";
+import { debounce, escapeHtml, formatMinutes } from "./utils.js";
+import { navigate } from "./router.js";
 
 export async function renderRecipeList(container) {
   container.innerHTML = `
