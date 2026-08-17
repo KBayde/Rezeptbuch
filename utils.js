@@ -73,3 +73,46 @@ export const SOURCE_TYPE_LABELS = {
   family: "Familie/Freunde",
   other: "Sonstige",
 };
+
+// --------------------------- Datum (Wochenplan) ---------------------------
+
+export const WEEKDAY_LABELS_DE = [
+  "Montag",
+  "Dienstag",
+  "Mittwoch",
+  "Donnerstag",
+  "Freitag",
+  "Samstag",
+  "Sonntag",
+];
+
+/** Liefert den Montag (00:00 lokal) der Woche, in der "date" liegt. */
+export function getWeekStart(date) {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  const day = d.getDay(); // 0 = Sonntag, 1 = Montag, ...
+  const diff = day === 0 ? -6 : 1 - day;
+  d.setDate(d.getDate() + diff);
+  return d;
+}
+
+export function addDays(date, n) {
+  const d = new Date(date);
+  d.setDate(d.getDate() + n);
+  return d;
+}
+
+/** Formatiert ein Datum als YYYY-MM-DD (für Supabase "date"-Spalten). */
+export function formatDateISO(date) {
+  const d = new Date(date);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+/** Formatiert ein Datum kurz für die Anzeige, z. B. "17.08." */
+export function formatDateDisplay(date) {
+  const d = new Date(date);
+  return d.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" });
+}

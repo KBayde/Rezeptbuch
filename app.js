@@ -4,6 +4,8 @@ import { renderLogin } from "./login.js";
 import { renderRecipeList } from "./recipeList.js";
 import { renderRecipeForm } from "./recipeForm.js";
 import { renderRecipeDetail } from "./recipeDetail.js";
+import { renderMealPlan } from "./mealPlan.js";
+import { renderShoppingList } from "./shoppingList.js";
 
 let currentSession = null;
 
@@ -12,6 +14,11 @@ function renderShell() {
     <div class="app-shell">
       <header class="topbar">
         <a href="#/" class="brand"><img src="./logo-mascot.png" alt="" class="brand-logo" />CookCook</a>
+        <nav class="topbar-nav">
+          <a href="#/">Rezepte</a>
+          <a href="#/wochenplan">Wochenplan</a>
+          <a href="#/einkaufsliste">Einkaufsliste</a>
+        </nav>
         <button id="logout-btn" class="btn btn-ghost btn-small">Abmelden</button>
       </header>
       <main id="app" class="app-main"></main>
@@ -42,6 +49,14 @@ function registerRoutes() {
   route("/rezepte/:id", async (params) => {
     const container = document.getElementById("app");
     await renderRecipeDetail(container, { id: params.id });
+  });
+  route("/wochenplan", async () => {
+    const container = document.getElementById("app");
+    await renderMealPlan(container);
+  });
+  route("/einkaufsliste", async () => {
+    const container = document.getElementById("app");
+    await renderShoppingList(container);
   });
 }
 

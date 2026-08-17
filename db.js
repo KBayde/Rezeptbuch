@@ -333,3 +333,183 @@ export async function deleteRecipe(id) {
   const { error } = await supabase.from("recipes").delete().eq("id", id);
   if (error) throw error;
 }
+
+// --------------------------- Wochenplan ---------------------------
+
+const MEAL_PLAN_SELECT = `
+  id, planned_date, servings, created_at,
+  recipes ( id, title, servings_base, prep_time_minutes,
+    recipe_images ( storage_path, image_type )
+  )
+`;
+
+function normalizeMealPlanEntry(row) {
+  const cover = (row.recipes?.recipe_images || []).find((img) => img.image_type === "cover");
+  return {
+    id: row.id,
+    date: row.planned_date,
+    servings: Number(row.servings),
+    recipeId: row.recipes?.id ?? null,
+    recipeTitle: row.recipes?.title ?? "(gelöschtes Rezept)",
+    recipeServingsBase: row.recipes ? Number(row.recipes.servings_base) : null,
+    prepTimeMinutes: row.recipes?.prep_time_minutes ?? null,
+    imageUrl: cover ? getRecipeImageUrl(cover.storage_path) : null,
+  };
+}
+
+/** Lädt alle geplanten Mahlzeiten im Datumsbereich [startDate, endDate] (je "YYYY-MM-DD"). */
+export async function listMealPlanEntries(startDate, endDate) {
+  const { data, error } = await supabase
+    .from("meal_plan_entries")
+    .select(MEAL_PLAN_SELECT)
+    .gte("planned_date", startDate)
+    .lte("planned_date", endDate)
+    .order("planned_date");
+  if (error) throw error;
+  return data.map(normalizeMealPlanEntry);
+}
+
+export async function addMealPlanEntry(date, recipeId, servings) {
+  const { data, error } = await supabase
+    .from("meal_plan_entries")
+    .insert({ planned_date: date, recipe_id: recipeId, servings })
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function updateMealPlanEntryServings(id, servings) {
+  const { error } = await supabase.from("meal_plan_entries").update({ servings }).eq("id", id);
+  if (error) throw error;
+}
+
+export async function removeMealPlanEntry(id) {
+  const { error } = await supabase.from("meal_plan_entries").delete().eq("id", id);
+  if (error) throw error;
+}
+
+// --------------------------- Einkaufsliste ---------------------------
+
+export async function listShoppingListItems() {
+  const { data, error } = await supabase
+    .from("shopping_list_items")
+    .select("*")
+    .order("checked")
+    .order("sort_order");
+  if (error) throw error;
+  return data.map((row) => ({
+    id: row.id,
+    name: row.name,
+    quantity: row.quantity === null ? null : Number(row.quantity),
+    unit: row.unit,
+    checked: row.checked,
+    source: row.source,
+  }));
+}
+
+export async function addShoppingListItem(name) {
+  const { error } = await supabase
+    .from("shopping_list_items")
+    .insert({ name, source: "manual", sort_order: 999 });
+  if (error) throw error;
+}
+
+export async function toggleShoppingListItem(id, checked) {
+  const { error } = await supabase.from("shopping_list_items").update({ checked }).eq("id", id);
+  if (error) throw error;
+}
+
+export async function deleteShoppingListItem(id) {
+  const { error } = await supabase.from("shopping_list_items").delete().eq("id", id);
+  if (error) throw error;
+}
+
+export async function clearCheckedShoppingListItems() {
+  const { error } = await supabase.from("shopping_list_items").delete().eq("checked", true);
+  if (error) throw error;
+}
+
+/**
+ * Baut die Einkaufsliste aus allen Rezepten neu, die im Datumsbereich
+ * [startDate, endDate] eingeplant sind: Mengen werden über alle Rezepte
+ * hinweg pro Zutat+Einheit aufsummiert (skaliert auf die geplante
+ * Portionenzahl). Nur automatisch erzeugte Positionen ("plan") werden
+ * ersetzt – manuell hinzugefügte Items und ihr Abhak-Status bleiben erhalten.
+ * Gibt die Anzahl der erzeugten Positionen zurück.
+ */
+export async function generateShoppingList(startDate, endDate) {
+  const entries = await listMealPlanEntries(startDate, endDate);
+
+  if (entries.length === 0) {
+    const { error } = await supabase.from("shopping_list_items").delete().eq("source", "plan");
+    if (error) throw error;
+    return 0;
+  }
+
+  const recipeIds = [...new Set(entries.map((e) => e.recipeId).filter(Boolean))];
+  const { data: recipeRows, error: fetchError } = await supabase
+    .from("recipes")
+    .select(
+      `id, servings_base,
+       recipe_ingredients ( quantity,
+         ingredients ( name ),
+         units ( abbreviation )
+       )`
+    )
+    .in("id", recipeIds);
+  if (fetchError) throw fetchError;
+
+  const recipesById = new Map(recipeRows.map((r) => [r.id, r]));
+  const aggregated = new Map(); // "name|unit" -> { name, unit, quantity }
+
+  for (const entry of entries) {
+    const recipe = recipesById.get(entry.recipeId);
+    if (!recipe) continue;
+    const base = Number(recipe.servings_base) || 1;
+    const ratio = entry.servings / base;
+
+    for (const ri of recipe.recipe_ingredients) {
+      const name = ri.ingredients?.name?.trim();
+      if (!name) continue;
+      const unit = ri.units?.abbreviation || "";
+      const key = `${name.toLowerCase()}|${unit}`;
+
+      if (ri.quantity === null) {
+        // z. B. "nach Geschmack" – ohne Menge, nur einmal auflisten
+        if (!aggregated.has(key)) aggregated.set(key, { name, unit, quantity: null });
+        continue;
+      }
+
+      const scaled = Number(ri.quantity) * ratio;
+      const existing = aggregated.get(key);
+      if (existing && existing.quantity !== null) {
+        existing.quantity += scaled;
+      } else {
+        aggregated.set(key, { name, unit, quantity: scaled });
+      }
+    }
+  }
+
+  const items = [...aggregated.values()].sort((a, b) => a.name.localeCompare(b.name, "de"));
+
+  const { error: deleteError } = await supabase
+    .from("shopping_list_items")
+    .delete()
+    .eq("source", "plan");
+  if (deleteError) throw deleteError;
+
+  if (items.length > 0) {
+    const rows = items.map((it, i) => ({
+      name: it.name,
+      quantity: it.quantity,
+      unit: it.unit || null,
+      source: "plan",
+      sort_order: i,
+    }));
+    const { error: insertError } = await supabase.from("shopping_list_items").insert(rows);
+    if (insertError) throw insertError;
+  }
+
+  return items.length;
+}
