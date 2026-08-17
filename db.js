@@ -95,11 +95,16 @@ export async function getOrCreateTag(name) {
 }
 
 // --------------------------- Bilder ---------------------------
+//
+// Bilder hängen an der Tabelle "recipe_images" (nicht mehr an einer einzelnen
+// Spalte auf "recipes"), damit ein Rezept später mehrere Bilder haben kann
+// (eigenes Titelbild + eingescannte Vorder-/Rückseite einer Rezeptkarte).
+// Aktuell nutzt die UI nur den Typ "cover" (das eine Foto im Formular).
 
 /** Lädt eine Bilddatei in den Storage-Bucket hoch und gibt den Speicherpfad zurück. */
-export async function uploadRecipeImage(file) {
+async function uploadImageFile(recipeId, file, imageType) {
   const ext = file.name.split(".").pop() || "jpg";
-  const path = `${crypto.randomUUID()}.${ext}`;
+  const path = `${recipeId}/${imageType}-${crypto.randomUUID()}.${ext}`;
   const { error } = await supabase.storage.from(IMAGE_BUCKET).upload(path, file, {
     cacheControl: "3600",
     upsert: false,
@@ -109,25 +114,79 @@ export async function uploadRecipeImage(file) {
 }
 
 /** Baut aus einem gespeicherten Bildpfad die öffentliche Bild-URL. */
-export function getRecipeImageUrl(imagePath) {
-  if (!imagePath) return null;
-  return supabase.storage.from(IMAGE_BUCKET).getPublicUrl(imagePath).data.publicUrl;
+export function getRecipeImageUrl(storagePath) {
+  if (!storagePath) return null;
+  return supabase.storage.from(IMAGE_BUCKET).getPublicUrl(storagePath).data.publicUrl;
+}
+
+/**
+ * Lädt ein Bild hoch und hängt es als recipe_images-Zeile an ein (bereits
+ * existierendes) Rezept. imageType: 'cover' | 'source_front' | 'source_back' | 'other'.
+ */
+export async function addRecipeImage(recipeId, file, imageType = "cover") {
+  const storagePath = await uploadImageFile(recipeId, file, imageType);
+  const { data, error } = await supabase
+    .from("recipe_images")
+    .insert({ recipe_id: recipeId, storage_path: storagePath, image_type: imageType })
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+/** Ersetzt das Titelbild ("cover") eines Rezepts durch eine neue Datei. */
+export async function replaceCoverImage(recipeId, file) {
+  await removeCoverImage(recipeId);
+  return addRecipeImage(recipeId, file, "cover");
+}
+
+/** Entfernt das aktuelle Titelbild ("cover") eines Rezepts, falls vorhanden. */
+export async function removeCoverImage(recipeId) {
+  const { data: existing, error: findError } = await supabase
+    .from("recipe_images")
+    .select("id, storage_path")
+    .eq("recipe_id", recipeId)
+    .eq("image_type", "cover");
+  if (findError) throw findError;
+  if (!existing || existing.length === 0) return;
+
+  const paths = existing.map((row) => row.storage_path);
+  await supabase.storage.from(IMAGE_BUCKET).remove(paths);
+  const { error: deleteError } = await supabase
+    .from("recipe_images")
+    .delete()
+    .in(
+      "id",
+      existing.map((row) => row.id)
+    );
+  if (deleteError) throw deleteError;
 }
 
 // --------------------------- Rezepte lesen ---------------------------
 
 const RECIPE_SELECT = `
   id, title, source_type, source_text, source_url, prep_time_minutes,
-  servings_base, notes, image_path, created_at, updated_at,
+  servings_base, notes, created_at, updated_at,
   recipe_steps ( id, step_number, instruction ),
   recipe_ingredients ( id, quantity, note, sort_order,
     ingredients ( id, name ),
     units ( id, name, abbreviation )
   ),
-  recipe_tags ( tags ( id, name ) )
+  recipe_tags ( tags ( id, name ) ),
+  recipe_images ( id, storage_path, image_type, sort_order )
 `;
 
 function normalizeRecipe(row) {
+  const images = [...row.recipe_images]
+    .sort((a, b) => a.sort_order - b.sort_order)
+    .map((img) => ({
+      id: img.id,
+      type: img.image_type,
+      storagePath: img.storage_path,
+      url: getRecipeImageUrl(img.storage_path),
+    }));
+  const cover = images.find((img) => img.type === "cover") || images[0] || null;
+
   return {
     id: row.id,
     title: row.title,
@@ -137,8 +196,8 @@ function normalizeRecipe(row) {
     prepTimeMinutes: row.prep_time_minutes,
     servingsBase: Number(row.servings_base),
     notes: row.notes,
-    imagePath: row.image_path,
-    imageUrl: getRecipeImageUrl(row.image_path),
+    images,
+    imageUrl: cover?.url ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     steps: [...row.recipe_steps]
@@ -197,7 +256,6 @@ export async function createRecipe(form) {
       prep_time_minutes: form.prepTimeMinutes,
       servings_base: form.servingsBase,
       notes: form.notes || null,
-      image_path: form.imagePath || null,
     })
     .select()
     .single();
@@ -218,7 +276,6 @@ export async function updateRecipe(id, form) {
       prep_time_minutes: form.prepTimeMinutes,
       servings_base: form.servingsBase,
       notes: form.notes || null,
-      image_path: form.imagePath || null,
     })
     .eq("id", id);
   if (error) throw error;
