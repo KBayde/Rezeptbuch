@@ -67,6 +67,7 @@ create table recipes (
   prep_time_minutes integer,
   servings_base numeric not null default 4,
   notes text,
+  image_path text,           -- Pfad im Storage-Bucket "recipe-images", nicht die volle URL
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );

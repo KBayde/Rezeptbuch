@@ -6,6 +6,10 @@
 // ============================================================================
 import { supabase } from "./supabaseClient.js";
 
+// Name des Supabase Storage Buckets für Rezeptbilder (muss im Dashboard
+// als "Public bucket" angelegt sein, siehe DEPLOYMENT.md).
+const IMAGE_BUCKET = "recipe-images";
+
 // --------------------------- Auth ---------------------------
 
 export async function getSession() {
@@ -90,11 +94,31 @@ export async function getOrCreateTag(name) {
   return created;
 }
 
+// --------------------------- Bilder ---------------------------
+
+/** Lädt eine Bilddatei in den Storage-Bucket hoch und gibt den Speicherpfad zurück. */
+export async function uploadRecipeImage(file) {
+  const ext = file.name.split(".").pop() || "jpg";
+  const path = `${crypto.randomUUID()}.${ext}`;
+  const { error } = await supabase.storage.from(IMAGE_BUCKET).upload(path, file, {
+    cacheControl: "3600",
+    upsert: false,
+  });
+  if (error) throw error;
+  return path;
+}
+
+/** Baut aus einem gespeicherten Bildpfad die öffentliche Bild-URL. */
+export function getRecipeImageUrl(imagePath) {
+  if (!imagePath) return null;
+  return supabase.storage.from(IMAGE_BUCKET).getPublicUrl(imagePath).data.publicUrl;
+}
+
 // --------------------------- Rezepte lesen ---------------------------
 
 const RECIPE_SELECT = `
   id, title, source_type, source_text, source_url, prep_time_minutes,
-  servings_base, notes, created_at, updated_at,
+  servings_base, notes, image_path, created_at, updated_at,
   recipe_steps ( id, step_number, instruction ),
   recipe_ingredients ( id, quantity, note, sort_order,
     ingredients ( id, name ),
@@ -113,6 +137,8 @@ function normalizeRecipe(row) {
     prepTimeMinutes: row.prep_time_minutes,
     servingsBase: Number(row.servings_base),
     notes: row.notes,
+    imagePath: row.image_path,
+    imageUrl: getRecipeImageUrl(row.image_path),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     steps: [...row.recipe_steps]
@@ -171,6 +197,7 @@ export async function createRecipe(form) {
       prep_time_minutes: form.prepTimeMinutes,
       servings_base: form.servingsBase,
       notes: form.notes || null,
+      image_path: form.imagePath || null,
     })
     .select()
     .single();
@@ -191,6 +218,7 @@ export async function updateRecipe(id, form) {
       prep_time_minutes: form.prepTimeMinutes,
       servings_base: form.servingsBase,
       notes: form.notes || null,
+      image_path: form.imagePath || null,
     })
     .eq("id", id);
   if (error) throw error;
