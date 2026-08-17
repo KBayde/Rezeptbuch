@@ -1,22 +1,23 @@
 /* ============================================================================
-   Design-System: warme, editoriale Kochbuch-Ästhetik statt generischem
-   Admin-UI. Serifen-Display-Font für Titel (Fraunces), klare Sans-Serif für
-   UI-Text (Inter). Zurückhaltende Farbpalette mit einem Grün- und einem
-   Terrakotta-Akzent.
+   Design-System: CookCook Markenpalette (Terracotta, Cream White, Sage
+   Green, Coffee Brown, Honey Gold). Serifen-Display-Font für Titel
+   (Fraunces), klare Sans-Serif für UI-Text (Inter).
    ============================================================================ */
 
 :root {
-  --color-bg: #fbf7ef;
+  --color-bg: #fff5e6;
   --color-surface: #ffffff;
-  --color-surface-alt: #f3ecdd;
-  --color-border: #e6ddc8;
-  --color-text: #2a2620;
-  --color-text-muted: #7c7364;
-  --color-primary: #34503e;
-  --color-primary-dark: #223629;
-  --color-primary-tint: #e7ede6;
-  --color-accent: #c1613d;
-  --color-accent-dark: #a04e30;
+  --color-surface-alt: #fbead0;
+  --color-border: #e9dcc0;
+  --color-text: #3a2e22;
+  --color-text-muted: #8c7f6e;
+  --color-primary: #aa492a;
+  --color-primary-dark: #7a3620;
+  --color-primary-tint: #fbeae2;
+  --color-accent: #8fa27a;
+  --color-accent-dark: #5d694f;
+  --color-highlight: #f2c166;
+  --color-highlight-tint: #fcf3e0;
   --color-danger: #ad3b26;
   --color-danger-tint: #f7e6e1;
   --shadow-sm: 0 1px 2px rgba(42, 38, 32, 0.06), 0 1px 1px rgba(42, 38, 32, 0.04);
@@ -82,17 +83,26 @@ a { color: var(--color-primary); }
   align-items: center;
   justify-content: space-between;
   padding: 0.85rem 1.25rem;
-  background: rgba(251, 247, 239, 0.92);
+  background: rgba(255, 245, 230, 0.92);
   backdrop-filter: blur(8px);
   border-bottom: 1px solid var(--color-border);
 }
 
 .brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
   font-family: var(--font-display);
   font-weight: 600;
   font-size: 1.15rem;
   color: var(--color-primary-dark);
   text-decoration: none;
+}
+
+.brand-logo {
+  height: 32px;
+  width: auto;
+  display: block;
 }
 
 .app-main {
@@ -574,7 +584,7 @@ textarea { resize: vertical; font-family: var(--font-body); }
   justify-content: center;
   padding: 1.5rem;
   background:
-    radial-gradient(circle at 15% 15%, var(--color-primary-tint), transparent 45%),
+    radial-gradient(circle at 15% 15%, var(--color-highlight-tint), transparent 45%),
     var(--color-bg);
 }
 
@@ -592,7 +602,7 @@ textarea { resize: vertical; font-family: var(--font-body); }
   text-align: center;
   margin-bottom: 1.5rem;
 }
-.auth-brand-mark { font-size: 2.2rem; display: block; margin-bottom: 0.4rem; }
+.auth-brand-mark { height: 76px; width: auto; display: block; margin: 0 auto 0.5rem; }
 .auth-brand h1 { font-size: 1.5rem; margin-bottom: 0.2rem; }
 
 .auth-hint {

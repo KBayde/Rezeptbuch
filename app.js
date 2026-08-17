@@ -11,7 +11,7 @@ function renderShell() {
   document.body.innerHTML = `
     <div class="app-shell">
       <header class="topbar">
-        <a href="#/" class="brand">🍲 Unser Rezeptbuch</a>
+        <a href="#/" class="brand"><img src="./logo-mascot.png" alt="" class="brand-logo" />CookCook</a>
         <button id="logout-btn" class="btn btn-ghost btn-small">Abmelden</button>
       </header>
       <main id="app" class="app-main"></main>

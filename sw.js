@@ -1,7 +1,7 @@
 // Sehr einfacher Service Worker: cached nur die App-Hülle (HTML/CSS/JS),
 // damit die App auch bei wackligem Netz schnell startet. Rezeptdaten selbst
 // kommen immer live von Supabase (kein Offline-Datenzugriff in Phase 1).
-const CACHE_NAME = "rezeptbuch-shell-v2";
+const CACHE_NAME = "cookcook-shell-v3";
 const SHELL_FILES = [
   "./",
   "./index.html",
@@ -17,6 +17,7 @@ const SHELL_FILES = [
   "./recipeForm.js",
   "./recipeDetail.js",
   "./manifest.json",
+  "./logo-mascot.png",
 ];
 
 self.addEventListener("install", (event) => {
