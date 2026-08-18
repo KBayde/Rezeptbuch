@@ -4,6 +4,7 @@ import {
   toggleShoppingListItem,
   deleteShoppingListItem,
   clearCheckedShoppingListItems,
+  addInventoryItem,
 } from "./db.js";
 import { escapeHtml, formatQuantity } from "./utils.js";
 
@@ -36,6 +37,11 @@ export async function renderShoppingList(container) {
   const form = container.querySelector("#add-item-form");
   const input = container.querySelector("#add-item-input");
 
+  // Zuletzt geladene Posten, damit die "In Vorrat übernehmen"-Mini-Formulare
+  // ohne erneuten Serverzugriff auf Name/Menge/Einheit des Postens zugreifen
+  // können (siehe wireItems()).
+  let currentItems = [];
+
   function itemHtml(item) {
     const qtyLabel =
       item.quantity !== null
@@ -43,17 +49,38 @@ export async function renderShoppingList(container) {
         : item.unit
         ? escapeHtml(item.unit)
         : "";
+    // Nur bereits abgehakte (= gekaufte) Posten lassen sich in den Vorrat
+    // übernehmen. Als Menge/Einheit wird nur eine "echte" Einheit
+    // vorbelegt, kein zusammengesetzter Text wie "2 TL + nach Geschmack".
+    const toInventoryBtn = item.checked
+      ? `<button class="btn btn-secondary btn-small shopping-item-to-inventory" data-item-id="${item.id}" type="button">→ Vorrat</button>`
+      : "";
+    const prefillQty = item.quantity !== null ? item.quantity : "";
+    const prefillUnit = item.quantity !== null && item.unit && !item.unit.includes(" ") ? item.unit : "";
+
     return `
       <li class="shopping-item ${item.checked ? "shopping-item--checked" : ""}" data-item-id="${item.id}">
-        <label class="shopping-item-label">
-          <input
-            type="checkbox" class="shopping-item-checkbox"
-            data-item-id="${item.id}" ${item.checked ? "checked" : ""}
-          />
-          <span class="shopping-item-qty">${qtyLabel}</span>
-          <span class="shopping-item-name">${escapeHtml(item.name)}</span>
-        </label>
-        <button class="row-remove shopping-item-remove" data-item-id="${item.id}" title="Entfernen" type="button">×</button>
+        <div class="shopping-item-row">
+          <label class="shopping-item-label">
+            <input
+              type="checkbox" class="shopping-item-checkbox"
+              data-item-id="${item.id}" ${item.checked ? "checked" : ""}
+            />
+            <span class="shopping-item-qty">${qtyLabel}</span>
+            <span class="shopping-item-name">${escapeHtml(item.name)}</span>
+          </label>
+          <div class="shopping-item-actions">
+            ${toInventoryBtn}
+            <button class="row-remove shopping-item-remove" data-item-id="${item.id}" title="Entfernen" type="button">×</button>
+          </div>
+        </div>
+        <form class="inventory-quick-add" data-item-id="${item.id}" hidden>
+          <input type="number" step="any" min="0" class="qa-quantity" placeholder="Menge" value="${prefillQty}" />
+          <input type="text" class="qa-unit" placeholder="Einheit" value="${escapeHtml(prefillUnit)}" />
+          <input type="date" class="qa-expiry" title="Mindesthaltbarkeitsdatum (optional)" />
+          <button type="submit" class="btn btn-primary btn-small">Übernehmen</button>
+          <button type="button" class="btn btn-ghost btn-small qa-cancel">Abbrechen</button>
+        </form>
       </li>
     `;
   }
@@ -81,6 +108,47 @@ export async function renderShoppingList(container) {
         }
       });
     });
+    list.querySelectorAll(".shopping-item-to-inventory").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const li = btn.closest(".shopping-item");
+        const qaForm = li.querySelector(".inventory-quick-add");
+        qaForm.hidden = !qaForm.hidden;
+        if (!qaForm.hidden) qaForm.querySelector(".qa-quantity").focus();
+      });
+    });
+    list.querySelectorAll(".qa-cancel").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        btn.closest(".inventory-quick-add").hidden = true;
+      });
+    });
+    list.querySelectorAll(".inventory-quick-add").forEach((qaForm) => {
+      qaForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const itemId = qaForm.dataset.itemId;
+        const sourceItem = currentItems.find((i) => i.id === itemId);
+        if (!sourceItem) return;
+
+        const quantityRaw = qaForm.querySelector(".qa-quantity").value;
+        const unit = qaForm.querySelector(".qa-unit").value.trim();
+        const expiryDate = qaForm.querySelector(".qa-expiry").value;
+        const submitBtn = qaForm.querySelector("button[type=submit]");
+        submitBtn.disabled = true;
+        try {
+          await addInventoryItem({
+            name: sourceItem.name,
+            quantity: quantityRaw === "" ? null : Number(quantityRaw),
+            unit: unit || null,
+            expiryDate: expiryDate || null,
+            source: "shopping_list",
+          });
+          qaForm.hidden = true;
+        } catch (err) {
+          alert("Konnte nicht in den Vorrat übernehmen: " + err.message);
+        } finally {
+          submitBtn.disabled = false;
+        }
+      });
+    });
   }
 
   async function load() {
@@ -95,6 +163,7 @@ export async function renderShoppingList(container) {
       return;
     }
 
+    currentItems = items;
     const openCount = items.filter((i) => !i.checked).length;
     countEl.textContent = items.length ? `${openCount} offen von ${items.length}` : "";
     emptyState.hidden = items.length > 0;

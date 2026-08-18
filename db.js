@@ -618,3 +618,57 @@ export async function generateShoppingList(startDate, endDate) {
 
   return items.length;
 }
+
+// --------------------------- Vorrat / Inventar ---------------------------
+//
+// inventory_items bildet den aktuellen Lebensmittelbestand ab (je Eintrag
+// eine "Charge", z. B. eine gekaufte Packung, mit eigener Menge/MHD).
+// expiry_date ist optional, da nicht jedes Lebensmittel ein MHD hat.
+
+function normalizeInventoryItem(row) {
+  return {
+    id: row.id,
+    name: row.name,
+    quantity: row.quantity === null ? null : Number(row.quantity),
+    unit: row.unit,
+    expiryDate: row.expiry_date,
+    source: row.source,
+  };
+}
+
+/** Lädt den gesamten Bestand, sortiert nach MHD (bald ablaufend zuerst, kein MHD am Ende). */
+export async function listInventoryItems() {
+  const { data, error } = await supabase
+    .from("inventory_items")
+    .select("*")
+    .order("expiry_date", { ascending: true, nullsFirst: false })
+    .order("name");
+  if (error) throw error;
+  return data.map(normalizeInventoryItem);
+}
+
+export async function addInventoryItem(item) {
+  const { error } = await supabase.from("inventory_items").insert({
+    name: item.name,
+    quantity: item.quantity ?? null,
+    unit: item.unit || null,
+    expiry_date: item.expiryDate || null,
+    source: item.source || "manual",
+  });
+  if (error) throw error;
+}
+
+/** changes: beliebige Teilmenge aus { quantity, unit, expiryDate }. */
+export async function updateInventoryItem(id, changes) {
+  const payload = {};
+  if ("quantity" in changes) payload.quantity = changes.quantity;
+  if ("unit" in changes) payload.unit = changes.unit;
+  if ("expiryDate" in changes) payload.expiry_date = changes.expiryDate;
+  const { error } = await supabase.from("inventory_items").update(payload).eq("id", id);
+  if (error) throw error;
+}
+
+export async function deleteInventoryItem(id) {
+  const { error } = await supabase.from("inventory_items").delete().eq("id", id);
+  if (error) throw error;
+}

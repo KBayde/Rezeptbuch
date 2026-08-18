@@ -18,7 +18,7 @@ export function escapeHtml(value) {
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
+    .replaceAll(""", "&quot;")
     .replaceAll("'", "&#39;");
 }
 
@@ -124,3 +124,20 @@ export const MEAL_TYPES = [
   { key: "snack", label: "Snack", icon: "🍏" },
   { key: "abendessen", label: "Abendessen", icon: "🌙" },
 ];
+
+// --------------------------- Datum (Vorrat / MHD) ---------------------------
+
+/** Formatiert ein Datum ausführlich mit Jahr, z. B. "17.08.2026" (für MHD-Anzeigen). */
+export function formatDateDisplayFull(date) {
+  const d = new Date(date);
+  return d.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" });
+}
+
+/** Ganzzahlige Differenz in Tagen zwischen heute (lokal, Mitternacht) und "dateStr" (YYYY-MM-DD). */
+export function daysUntil(dateStr) {
+  if (!dateStr) return null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const target = new Date(`${dateStr}T00:00:00`);
+  return Math.round((target - today) / 86400000);
+}

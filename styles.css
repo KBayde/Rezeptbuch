@@ -832,8 +832,8 @@ textarea { resize: vertical; font-family: var(--font-body); }
 
 .shopping-item {
   display: flex;
-  align-items: center;
-  gap: 0.6rem;
+  flex-direction: column;
+  gap: 0.5rem;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
@@ -846,12 +846,48 @@ textarea { resize: vertical; font-family: var(--font-body); }
   text-decoration: line-through;
 }
 
+.shopping-item-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
 .shopping-item-label {
   display: flex;
   align-items: center;
   gap: 0.6rem;
   flex: 1;
   cursor: pointer;
+}
+
+.shopping-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.inventory-quick-add {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  padding-top: 0.5rem;
+  border-top: 1px dashed var(--color-border);
+}
+.inventory-quick-add .qa-quantity {
+  width: 80px;
+  padding: 0.35rem 0.5rem;
+  font-size: 0.85rem;
+}
+.inventory-quick-add .qa-unit {
+  width: 90px;
+  padding: 0.35rem 0.5rem;
+  font-size: 0.85rem;
+}
+.inventory-quick-add .qa-expiry {
+  width: 150px;
+  padding: 0.35rem 0.5rem;
+  font-size: 0.85rem;
 }
 
 .shopping-item-checkbox {
@@ -875,6 +911,128 @@ textarea { resize: vertical; font-family: var(--font-body); }
   width: 28px;
   height: 28px;
   font-size: 1rem;
+}
+
+/* ------------------------------ Vorrat / Inventar ------------------------------ */
+
+.inventory-add-form {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.5rem;
+}
+.inventory-add-form .search-input {
+  flex: 2;
+  min-width: 160px;
+}
+.inventory-add-form #inv-quantity {
+  width: 90px;
+}
+.inventory-add-form #inv-unit {
+  width: 100px;
+}
+.inventory-add-form #inv-expiry {
+  width: 160px;
+}
+
+.inventory-soon {
+  border-color: var(--color-danger);
+  margin-bottom: 1.5rem;
+}
+.inventory-soon h2 {
+  margin-bottom: 0.6rem;
+}
+.inventory-soon-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.inventory-soon-list li {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.92rem;
+}
+
+.inventory-list {
+  list-style: none;
+  margin: 0 0 1.5rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.inventory-item {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 0.65rem 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.inventory-item-main {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+.inventory-item-name {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.inventory-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0.2rem 0.6rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.inventory-badge--expired {
+  background: var(--color-danger-tint);
+  color: var(--color-danger);
+}
+.inventory-badge--soon {
+  background: var(--color-highlight-tint);
+  color: #9a6a12;
+}
+.inventory-badge--ok {
+  background: rgba(143, 162, 122, 0.2);
+  color: var(--color-accent-dark);
+}
+.inventory-badge--none {
+  background: var(--color-surface-alt);
+  color: var(--color-text-muted);
+}
+
+.inventory-item-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.inventory-qty-input {
+  width: 80px;
+  padding: 0.35rem 0.5rem;
+  font-size: 0.85rem;
+}
+.inventory-unit-input {
+  width: 90px;
+  padding: 0.35rem 0.5rem;
+  font-size: 0.85rem;
+}
+.inventory-expiry-input {
+  width: 150px;
+  padding: 0.35rem 0.5rem;
+  font-size: 0.85rem;
 }
 
 /* ------------------------------ Auth-Screen ------------------------------ */

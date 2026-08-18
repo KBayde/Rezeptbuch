@@ -7,6 +7,7 @@ import { renderRecipeDetail } from "./recipeDetail.js";
 import { renderMealPlan } from "./mealPlan.js";
 import { renderShoppingList } from "./shoppingList.js";
 import { renderPhotoImport } from "./photoImport.js";
+import { renderInventory } from "./inventory.js";
 
 let currentSession = null;
 
@@ -19,6 +20,7 @@ function renderShell() {
           <a href="#/">Rezepte</a>
           <a href="#/wochenplan">Wochenplan</a>
           <a href="#/einkaufsliste">Einkaufsliste</a>
+          <a href="#/vorrat">Vorrat</a>
         </nav>
         <button id="logout-btn" class="btn btn-ghost btn-small">Abmelden</button>
       </header>
@@ -62,6 +64,10 @@ function registerRoutes() {
   route("/einkaufsliste", async () => {
     const container = document.getElementById("app");
     await renderShoppingList(container);
+  });
+  route("/vorrat", async () => {
+    const container = document.getElementById("app");
+    await renderInventory(container);
   });
 }
 
