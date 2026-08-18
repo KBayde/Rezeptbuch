@@ -5,7 +5,7 @@
 // einfach: neue Funktionen hier ergänzen, Views bleiben unangetastet.
 // ============================================================================
 import { supabase } from "./supabaseClient.js";
-import { formatQuantity } from "./utils.js";
+import { formatQuantity, getWeekStart, formatDateISO } from "./utils.js";
 
 // Name des Supabase Storage Buckets für Rezeptbilder (muss im Dashboard
 // als "Public bucket" angelegt sein, siehe DEPLOYMENT.md).
@@ -424,21 +424,23 @@ export async function listShoppingListItems() {
     .order("checked")
     .order("sort_order");
   if (error) throw error;
-  return data.map((row) => ({
-    id: row.id,
-    name: row.name,
-    quantity: row.quantity === null ? null : Number(row.quantity),
-    unit: row.unit,
-    checked: row.checked,
-    source: row.source,
-  }));
+return data.map((row) => ({
+      id: row.id,
+      name: row.name,
+      quantity: row.quantity === null ? null : Number(row.quantity),
+      unit: row.unit,
+      checked: row.checked,
+      source: row.source,
+      plannedPrice: row.planned_price === null || row.planned_price === undefined ? null : Number(row.planned_price),
+      actualPrice: row.actual_price === null || row.actual_price === undefined ? null : Number(row.actual_price),
+}));
 }
 
-export async function addShoppingListItem(name) {
-  const { error } = await supabase
-    .from("shopping_list_items")
-    .insert({ name, source: "manual", sort_order: 999 });
-  if (error) throw error;
+export async function addShoppingListItem(name, plannedPrice = null) {
+    const { error } = await supabase
+      .from("shopping_list_items")
+      .insert({ name, source: "manual", sort_order: 999, planned_price: plannedPrice });
+    if (error) throw error;
 }
 
 export async function toggleShoppingListItem(id, checked) {
@@ -446,14 +448,41 @@ export async function toggleShoppingListItem(id, checked) {
   if (error) throw error;
 }
 
-export async function deleteShoppingListItem(id) {
-  const { error } = await supabase.from("shopping_list_items").delete().eq("id", id);
+/** Setzt geplanten und/oder tatsaechlichen Preis eines Postens. changes: Teilmenge aus { plannedPrice, actualPrice }. */
+export async function updateShoppingListItemPrice(id, changes = {}) {
+  const payload = {};
+  if ("plannedPrice" in changes) payload.planned_price = changes.plannedPrice;
+  if ("actualPrice" in changes) payload.actual_price = changes.actualPrice;
+  if (Object.keys(payload).length === 0) return;
+  const { error } = await supabase.from("shopping_list_items").update(payload).eq("id", id);
   if (error) throw error;
 }
 
+export async function deleteShoppingListItem(id) {
+    const { error } = await supabase.from("shopping_list_items").delete().eq("id", id);
+    if (error) throw error;
+}
+
+/**
+ * Entfernt alle abgehakten Posten aus der Einkaufsliste. Bevor geloescht wird,
+  * werden ihre Preisangaben dauerhaft gesichert (siehe recordPurchaseHistory):
+   * tatsaechliche Preise wandern in price_history (Basis fuer Durchschnittspreise),
+    * geplante+tatsaechliche Summen werden auf die aktuelle Kalenderwoche in
+     * weekly_household_costs aufaddiert (Basis fuer den Kosten-Tracker).
+      */
 export async function clearCheckedShoppingListItems() {
-  const { error } = await supabase.from("shopping_list_items").delete().eq("checked", true);
-  if (error) throw error;
+    const { data: checkedItems, error: fetchError } = await supabase
+      .from("shopping_list_items")
+      .select("name, unit, planned_price, actual_price")
+      .eq("checked", true);
+    if (fetchError) throw fetchError;
+
+    if (checkedItems && checkedItems.length > 0) {
+          await recordPurchaseHistory(checkedItems);
+    }
+
+    const { error } = await supabase.from("shopping_list_items").delete().eq("checked", true);
+    if (error) throw error;
 }
 
 // Einheiten, die sich sinnvoll ineinander umrechnen lassen, damit z. B.
@@ -671,4 +700,121 @@ export async function updateInventoryItem(id, changes) {
 export async function deleteInventoryItem(id) {
   const { error } = await supabase.from("inventory_items").delete().eq("id", id);
   if (error) throw error;
+}
+
+
+async function recordPurchaseHistory(items) {
+    const todayIso = formatDateISO(new Date());
+    const weekStartIso = formatDateISO(getWeekStart(new Date()));
+
+    let plannedSum = 0;
+    let actualSum = 0;
+    const priceHistoryRows = [];
+
+    for (const item of items) {
+          const planned = item.planned_price === null || item.planned_price === undefined ? 0 : Number(item.planned_price);
+          const actual = item.actual_price === null || item.actual_price === undefined ? 0 : Number(item.actual_price);
+          plannedSum += planned;
+          actualSum += actual;
+          if (item.actual_price !== null && item.actual_price !== undefined) {
+                  priceHistoryRows.push({
+                            ingredient_name: item.name,
+                            price: actual,
+                            unit: item.unit || null,
+                            recorded_date: todayIso,
+                  });
+          }
+    }
+
+    if (priceHistoryRows.length > 0) {
+          const { error } = await supabase.from("price_history").insert(priceHistoryRows);
+          if (error) throw error;
+    }
+
+    if (plannedSum > 0 || actualSum > 0) {
+          const { data: existing, error: findError } = await supabase
+            .from("weekly_household_costs")
+            .select("*")
+            .eq("week_start", weekStartIso)
+            .maybeSingle();
+          if (findError) throw findError;
+
+          if (existing) {
+                  const { error: updError } = await supabase
+                    .from("weekly_household_costs")
+                    .update({
+                                planned_total: Number(existing.planned_total) + plannedSum,
+                                actual_total: Number(existing.actual_total) + actualSum,
+                                updated_at: new Date().toISOString(),
+                    })
+                    .eq("week_start", weekStartIso);
+                  if (updError) throw updError;
+          } else {
+                  const { error: insError } = await supabase.from("weekly_household_costs").insert({
+                            week_start: weekStartIso,
+                            planned_total: plannedSum,
+                            actual_total: actualSum,
+                  });
+                  if (insError) throw insError;
+          }
+    }
+}
+
+export async function getAveragePrice(ingredientName) {
+    const trimmed = (ingredientName || "").trim();
+    if (!trimmed) return null;
+    const { data, error } = await supabase.from("price_history").select("price").ilike("ingredient_name", trimmed);
+    if (error) throw error;
+    if (!data || data.length === 0) return null;
+    const sum = data.reduce((acc, row) => acc + Number(row.price), 0);
+    return sum / data.length;
+}
+
+export async function getPriceHistoryInRange(startDate, endDate) {
+    const { data, error } = await supabase
+      .from("price_history")
+      .select("*")
+      .gte("recorded_date", startDate)
+      .lte("recorded_date", endDate)
+      .order("recorded_date", { ascending: false })
+      .order("created_at", { ascending: false });
+    if (error) throw error;
+    return data.map((row) => ({
+          id: row.id,
+          ingredientName: row.ingredient_name,
+          price: Number(row.price),
+          unit: row.unit,
+          recordedDate: row.recorded_date,
+    }));
+}
+
+export async function getRecentPriceHistory(limit = 8) {
+    const { data, error } = await supabase
+      .from("price_history")
+      .select("*")
+      .order("recorded_date", { ascending: false })
+      .order("created_at", { ascending: false })
+      .limit(limit);
+    if (error) throw error;
+    return data.map((row) => ({
+          id: row.id,
+          ingredientName: row.ingredient_name,
+          price: Number(row.price),
+          unit: row.unit,
+          recordedDate: row.recorded_date,
+    }));
+}
+
+export async function getWeeklyHouseholdCosts(limitWeeks = 26) {
+    const { data, error } = await supabase
+      .from("weekly_household_costs")
+      .select("*")
+      .order("week_start", { ascending: false })
+      .limit(limitWeeks);
+    if (error) throw error;
+    return data.map((row) => ({
+          weekStart: row.week_start,
+          plannedTotal: Number(row.planned_total),
+          actualTotal: Number(row.actual_total),
+    }));
 }
