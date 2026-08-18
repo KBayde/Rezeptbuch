@@ -1116,3 +1116,10 @@ textarea { resize: vertical; font-family: var(--font-body); }
 .inventory-quick-add[hidden] {
      display: none;
 }
+
+
+.btn:disabled {
+     opacity: 0.45;
+     cursor: not-allowed;
+     pointer-events: none;
+}
