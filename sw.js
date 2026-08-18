@@ -1,7 +1,7 @@
-// Sehr einfacher Service Worker: cached nur die App-Hülle (HTML/CSS/JS),
+// Sehr einfacher Service Worker: cached nur die App-Huelle (HTML/CSS/JS),
 // damit die App auch bei wackligem Netz schnell startet. Rezeptdaten selbst
 // kommen immer live von Supabase (kein Offline-Datenzugriff in Phase 1).
-const CACHE_NAME = "cookcook-shell-v10";
+const CACHE_NAME = "cookcook-shell-v11";
 const SHELL_FILES = [
   "./",
   "./index.html",
@@ -22,14 +22,15 @@ const SHELL_FILES = [
   "./youtubeImport.js",
   "./linkImport.js",
   "./inventory.js",
+  "./costs.js",
   "./manifest.json",
   "./logo-mascot.png",
-];
+  ];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => cache.addAll(SHELL_FILES)).catch(() => {})
-  );
+    );
   self.skipWaiting();
 });
 
@@ -37,32 +38,32 @@ self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
       Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)))
-    )
-  );
+                       )
+    );
   self.clients.claim();
 });
 
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
 
-  // Nur eigene, statische Dateien cachen. Supabase-Aufrufe (andere Domain)
-  // laufen immer direkt übers Netz. API-Routen (z. B. Foto-Erkennung) sind
-  // dynamisch und dürfen nie aus dem Cache beantwortet werden.
-  if (url.origin !== self.location.origin) return;
+                      // Nur eigene, statische Dateien cachen. Supabase-Aufrufe (andere Domain)
+                      // laufen immer direkt uebers Netz. API-Routen (z. B. Foto-Erkennung) sind
+                      // dynamisch und duerfen nie aus dem Cache beantwortet werden.
+                      if (url.origin !== self.location.origin) return;
   if (url.pathname.startsWith("/api/")) return;
 
-  event.respondWith(
-    caches.match(event.request).then((cached) => {
-      const network = fetch(event.request)
-        .then((response) => {
-          if (response.ok) {
-            const clone = response.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
-          }
-          return response;
-        })
-        .catch(() => cached);
-      return cached || network;
-    })
-  );
+                      event.respondWith(
+                        caches.match(event.request).then((cached) => {
+                          const network = fetch(event.request)
+                          .then((response) => {
+                            if (response.ok) {
+                              const clone = response.clone();
+                              caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+                            }
+                            return response;
+                          })
+                          .catch(() => cached);
+                          return cached || network;
+                        })
+                        );
 });
