@@ -143,6 +143,8 @@ export default async function handler(req, res) {
       throw new Error("YouTube-Seite konnte nicht geladen werden (Status " + pageRes.status + ").");
     }
     const html = await pageRes.text();
+    globalThis.__lastHtml = html;
+    globalThis.__lastStatus = pageRes.status;
     title = extractMetaContent(html, "og:title");
     description = extractDescription(html);
     channel = extractChannelName(html);
@@ -159,6 +161,9 @@ export default async function handler(req, res) {
     res.status(422).json({
       error:
         "Für dieses Video konnten weder Titel noch Beschreibung gelesen werden. Bitte den Link prüfen oder das Rezept manuell anlegen.",
+      debugStatus: globalThis.__lastStatus,
+      debugHtmlSnippet: (globalThis.__lastHtml || "").slice(0, 800),
+      debugHtmlLength: (globalThis.__lastHtml || "").length,
     });
     return;
   }
