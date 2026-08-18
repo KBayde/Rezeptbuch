@@ -27,6 +27,7 @@ export async function renderShoppingList(container) {
     <p id="shopping-empty" class="empty-state" hidden>Deine Einkaufsliste ist leer.</p>
 
     <div class="week-footer">
+      <button id="move-checked-to-inventory-btn" class="btn btn-secondary" type="button">→ Erledigte in Vorrat übernehmen</button>
       <button id="clear-checked-btn" class="btn btn-secondary" type="button">Erledigte entfernen</button>
     </div>
   `;
@@ -36,6 +37,8 @@ export async function renderShoppingList(container) {
   const countEl = container.querySelector("#shopping-count");
   const form = container.querySelector("#add-item-form");
   const input = container.querySelector("#add-item-input");
+  const moveCheckedBtn = container.querySelector("#move-checked-to-inventory-btn");
+  const clearCheckedBtn = container.querySelector("#clear-checked-btn");
 
   // Zuletzt geladene Posten, damit die "In Vorrat übernehmen"-Mini-Formulare
   // ohne erneuten Serverzugriff auf Name/Menge/Einheit des Postens zugreifen
@@ -165,8 +168,11 @@ export async function renderShoppingList(container) {
 
     currentItems = items;
     const openCount = items.filter((i) => !i.checked).length;
+    const checkedCount = items.length - openCount;
     countEl.textContent = items.length ? `${openCount} offen von ${items.length}` : "";
     emptyState.hidden = items.length > 0;
+    moveCheckedBtn.disabled = checkedCount === 0;
+    clearCheckedBtn.disabled = checkedCount === 0;
 
     list.innerHTML = items.map(itemHtml).join("");
     wireItems();
@@ -185,12 +191,38 @@ export async function renderShoppingList(container) {
     }
   });
 
-  container.querySelector("#clear-checked-btn").addEventListener("click", async () => {
+  clearCheckedBtn.addEventListener("click", async () => {
     try {
       await clearCheckedShoppingListItems();
       await load();
     } catch (err) {
       alert("Konnte nicht entfernen: " + err.message);
+    }
+  });
+
+  // Übernimmt alle abgehakten Posten in einem Rutsch in den Vorrat (ohne
+  // MHD, das kann man danach direkt im Vorrat nachtragen) und entfernt sie
+  // anschließend aus der Einkaufsliste. Für Posten, bei denen man das MHD
+  // gleich mit erfassen will, bleibt der Einzel-Button "→ Vorrat" nutzbar.
+  moveCheckedBtn.addEventListener("click", async () => {
+    const checkedItems = currentItems.filter((i) => i.checked);
+    if (!checkedItems.length) return;
+    moveCheckedBtn.disabled = true;
+    try {
+      for (const item of checkedItems) {
+        await addInventoryItem({
+          name: item.name,
+          quantity: item.quantity,
+          unit: item.unit,
+          expiryDate: null,
+          source: "shopping_list",
+        });
+      }
+      await clearCheckedShoppingListItems();
+      await load();
+    } catch (err) {
+      alert("Konnte nicht in den Vorrat übernehmen: " + err.message);
+      moveCheckedBtn.disabled = false;
     }
   });
 
