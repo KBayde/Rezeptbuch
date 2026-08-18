@@ -1,6 +1,7 @@
 import { navigate } from "./router.js";
 
 const DRAFT_KEY = "cookcook-photo-draft";
+const MAX_IMAGES = 5;
 
 /**
  * Verkleinert ein Bild clientseitig (max. Kantenlänge + JPEG-Kompression),
@@ -33,19 +34,17 @@ export async function renderPhotoImport(container) {
     <a href="#/" class="back-link">← Zurück</a>
     <h1>Rezept per Foto erfassen</h1>
     <p class="text-muted">
-      Foto von einer Kochbuchseite, Zeitschrift oder einem handschriftlichen Rezept hochladen –
-      Titel, Zutaten und Zubereitungsschritte werden automatisch erkannt. Im nächsten Schritt
-      kannst du alles noch im gewohnten Formular prüfen und anpassen.
+      Ein oder mehrere Fotos hochladen (z. B. mehrere Seiten desselben Rezepts) –
+      Titel, Zutaten und Zubereitungsschritte werden automatisch erkannt. Im nächsten
+      Schritt kannst du alles noch im gewohnten Formular prüfen und anpassen.
     </p>
 
     <div class="card stack-md">
       <label class="field">
-        <span>Foto auswählen</span>
-        <input type="file" id="photo-input" accept="image/*" capture="environment" />
+        <span>Fotos auswählen (bis zu ${MAX_IMAGES})</span>
+        <input type="file" id="photo-input" accept="image/*" capture="environment" multiple />
       </label>
-      <div id="photo-preview-wrap" class="image-preview-wrap" hidden>
-        <img id="photo-preview" class="image-preview" alt="" />
-      </div>
+      <div id="photo-thumbs" class="photo-thumbs"></div>
       <button type="button" id="analyze-btn" class="btn btn-primary" disabled>Rezept erkennen</button>
       <p id="photo-error" class="form-error" hidden></p>
       <p id="photo-status" class="text-muted" hidden></p>
@@ -53,45 +52,72 @@ export async function renderPhotoImport(container) {
   `;
 
   const input = container.querySelector("#photo-input");
-  const previewWrap = container.querySelector("#photo-preview-wrap");
-  const preview = container.querySelector("#photo-preview");
+  const thumbsWrap = container.querySelector("#photo-thumbs");
   const analyzeBtn = container.querySelector("#analyze-btn");
   const errorEl = container.querySelector("#photo-error");
   const statusEl = container.querySelector("#photo-status");
 
-  let selectedFile = null;
+  let selectedFiles = [];
+
+  function renderThumbs() {
+    thumbsWrap.innerHTML = selectedFiles
+      .map(
+        (file, i) => `
+        <div class="photo-thumb" data-index="${i}">
+          <img src="${URL.createObjectURL(file)}" alt="" />
+          <button type="button" class="photo-thumb-remove" data-remove-photo="${i}" aria-label="Foto entfernen">×</button>
+        </div>
+      `
+      )
+      .join("");
+    analyzeBtn.disabled = selectedFiles.length === 0;
+  }
 
   input.addEventListener("change", () => {
-    const file = input.files?.[0];
     errorEl.hidden = true;
-    if (!file) {
-      selectedFile = null;
-      analyzeBtn.disabled = true;
-      previewWrap.hidden = true;
-      return;
+    const newFiles = Array.from(input.files || []);
+    for (const file of newFiles) {
+      if (selectedFiles.length >= MAX_IMAGES) break;
+      selectedFiles.push(file);
     }
-    selectedFile = file;
-    preview.src = URL.createObjectURL(file);
-    previewWrap.hidden = false;
-    analyzeBtn.disabled = false;
+    input.value = "";
+    renderThumbs();
+  });
+
+  thumbsWrap.addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-remove-photo]");
+    if (!btn) return;
+    selectedFiles.splice(Number(btn.dataset.removePhoto), 1);
+    renderThumbs();
   });
 
   analyzeBtn.addEventListener("click", async () => {
-    if (!selectedFile) return;
+    if (selectedFiles.length === 0) return;
     errorEl.hidden = true;
     statusEl.hidden = false;
-    statusEl.textContent = "Foto wird analysiert – das kann einen Moment dauern…";
+    statusEl.textContent =
+      selectedFiles.length > 1
+        ? "Fotos werden analysiert – das kann einen Moment dauern…"
+        : "Foto wird analysiert – das kann einen Moment dauern…";
     analyzeBtn.disabled = true;
     input.disabled = true;
 
     try {
-      const { base64, mediaType } = await fileToResizedBase64(selectedFile);
+      const images = await Promise.all(selectedFiles.map((file) => fileToResizedBase64(file)));
       const res = await fetch("/api/extract-recipe", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ imageBase64: base64, mediaType }),
+        body: JSON.stringify({ images }),
       });
-      const data = await res.json();
+
+      let data;
+      try {
+        data = await res.json();
+      } catch {
+        throw new Error(
+          "Der Server hat keine gültige Antwort geliefert (evtl. Zeitüberschreitung bei großen oder vielen Fotos). Bitte mit weniger oder kleineren Fotos erneut versuchen."
+        );
+      }
       if (!res.ok) {
         throw new Error(data.error || "Rezept konnte nicht erkannt werden.");
       }

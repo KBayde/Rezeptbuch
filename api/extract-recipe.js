@@ -1,17 +1,24 @@
 // ============================================================================
-// Vercel Serverless Function: nimmt ein Rezept-Foto entgegen (Kochbuchseite,
-// Zeitschrift, handschriftliche Notiz, ...) und lässt es von der Anthropic
-// API (Claude, mit Bildverständnis) in strukturierte Rezept-Felder umwandeln.
+// Vercel Serverless Function: nimmt ein oder mehrere Rezept-Fotos entgegen
+// (Kochbuchseite, Zeitschrift, handschriftliche Notiz, mehrere Seiten, ...)
+// und lässt sie von der Anthropic API (Claude, mit Bildverständnis) in
+// strukturierte Rezept-Felder umwandeln.
 //
 // Benötigt die Umgebungsvariable ANTHROPIC_API_KEY in den Vercel-Projekt-
 // einstellungen (Settings -> Environment Variables). Ohne diesen Key liefert
 // die Funktion einen klaren Fehlertext statt eines kryptischen 500ers.
 // ============================================================================
 
+// Bildverständnis kann bei mehreren/großen Fotos länger als die Vercel-
+// Standardzeit von 10s dauern. Erlaubt der Funktion bis zu 60s Laufzeit.
+export const config = {
+  maxDuration: 60,
+};
+
 const MODEL = process.env.ANTHROPIC_MODEL || "claude-sonnet-5";
 const ANTHROPIC_VERSION = "2023-06-01";
 
-const SYSTEM_PROMPT = `Du bist ein Assistent, der Kochrezepte aus Fotos (z. B. Kochbuchseiten, Zeitschriften, handschriftliche Notizen) in strukturierte Daten umwandelt.
+const SYSTEM_PROMPT = `Du bist ein Assistent, der Kochrezepte aus Fotos (z. B. Kochbuchseiten, Zeitschriften, handschriftliche Notizen) in strukturierte Daten umwandelt. Manchmal bekommst du mehrere Fotos, die zusammen ein einziges Rezept zeigen (z. B. mehrere Buchseiten oder Ausschnitte) – kombiniere sie dann zu einem gemeinsamen Ergebnis.
 
 Antworte AUSSCHLIESSLICH mit einem einzelnen validen JSON-Objekt, ohne Markdown-Codeblock, ohne Erklärtext davor oder danach. Halte dich exakt an dieses Schema:
 
@@ -59,11 +66,31 @@ export default async function handler(req, res) {
     return;
   }
 
-  const { imageBase64, mediaType } = req.body || {};
-  if (!imageBase64 || !mediaType) {
-    res.status(400).json({ error: "imageBase64 und mediaType sind erforderlich." });
+  const body = req.body || {};
+  let images = Array.isArray(body.images) ? body.images : null;
+  if (!images && body.imageBase64 && body.mediaType) {
+    images = [{ base64: body.imageBase64, mediaType: body.mediaType }];
+  }
+  images = (images || []).filter((img) => img && img.base64 && img.mediaType);
+
+  if (images.length === 0) {
+    res.status(400).json({ error: "Mindestens ein Foto ist erforderlich." });
     return;
   }
+  if (images.length > 5) {
+    res.status(400).json({ error: "Bitte maximal 5 Fotos auf einmal hochladen." });
+    return;
+  }
+
+  const imageBlocks = images.map((img) => ({
+    type: "image",
+    source: { type: "base64", media_type: img.mediaType, data: img.base64 },
+  }));
+
+  const instructionText =
+    images.length > 1
+      ? "Diese Fotos zeigen zusammen ein einzelnes Rezept (z. B. mehrere Seiten oder Ausschnitte). Kombiniere alle Informationen aus den Fotos zu einem einzigen Rezept-JSON gemäß dem vorgegebenen Schema."
+      : "Extrahiere das Rezept aus diesem Foto als JSON gemäß dem vorgegebenen Schema.";
 
   try {
     const response = await fetch("https://api.anthropic.com/v1/messages", {
@@ -80,13 +107,7 @@ export default async function handler(req, res) {
         messages: [
           {
             role: "user",
-            content: [
-              { type: "image", source: { type: "base64", media_type: mediaType, data: imageBase64 } },
-              {
-                type: "text",
-                text: "Extrahiere das Rezept aus diesem Foto als JSON gemäß dem vorgegebenen Schema.",
-              },
-            ],
+            content: [...imageBlocks, { type: "text", text: instructionText }],
           },
         ],
       }),
