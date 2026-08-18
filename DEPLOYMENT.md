@@ -77,6 +77,36 @@ weiterhin ganz normal – nur der Foto-Import zeigt dann eine Fehlermeldung an.
 Der Key wird ausschließlich serverseitig verwendet (in `api/extract-recipe.js`) und ist
 im Browser nie sichtbar.
 
+## Schritt 6c – YouTube-Import einrichten (optional)
+
+Die Funktion "Rezept per YouTube-Link erfassen" liest Titel und Beschreibung eines
+Kochvideos aus und lässt daraus (wie beim Foto-Import) automatisch ein Rezept
+vorschlagen. Dafür wird zusätzlich zum Anthropic-Key ein **kostenloser** YouTube-API-Key
+benötigt (Google-Konto vorausgesetzt, kein Kreditkarten-Setup nötig für die geringe
+Nutzung hier). Ohne diesen Schritt funktioniert der Rest der App weiterhin ganz normal
+– nur der YouTube-Import zeigt dann eine Fehlermeldung an.
+
+1. Gehe auf **https://console.cloud.google.com** → mit deinem Google-Konto einloggen.
+2. Oben ein neues Projekt anlegen (z. B. `rezeptbuch`) oder ein bestehendes auswählen.
+3. Im Menü links: **APIs & Dienste** → **Bibliothek** → nach "YouTube Data API v3" suchen
+   → öffnen → **Aktivieren** klicken.
+4. Im Menü links: **APIs & Dienste** → **Anmeldedaten** → **+ Anmeldedaten erstellen** →
+   **API-Schlüssel**. Der Key wird sofort angezeigt – kopieren.
+   (Optional, aber empfohlen: Klick auf den neuen Key → unter "API-Einschränkungen" nur
+   "YouTube Data API v3" erlauben, das schützt den Key vor Missbrauch.)
+5. Im Vercel-Dashboard: dein `rezeptbuch`-Projekt öffnen → **Settings** → **Environment
+   Variables**.
+6. Neue Variable anlegen:
+   - Name: `YOUTUBE_API_KEY`
+   - Value: der eben kopierte Key
+   - Environment: Production (und optional Preview/Development)
+7. **Save** klicken, danach im Tab **Deployments** beim neuesten Deployment auf die drei
+   Punkte → **Redeploy**, damit die neue Umgebungsvariable aktiv wird.
+
+Die YouTube Data API v3 hat ein kostenloses Kontingent von 10.000 Anfragen pro Tag –
+jeder Videoabruf hier kostet nur 1 Einheit, das reicht für eine private Rezeptsammlung
+bei weitem aus.
+
 ## Schritt 7 – Auf dem Homescreen installieren
 
 **iPad / iPhone (Safari):**
@@ -100,5 +130,6 @@ im Browser nie sichtbar.
 - **Leere Seite / Fehler in der Konsole:** meist ein Tippfehler in `js/config.js` (URL oder Key). Browser-Konsole öffnen (iPad: über Mac + Safari-Entwicklertools, oder am Desktop testen) und Fehlermeldung prüfen.
 - **"row-level security policy" Fehler beim Speichern:** Das bedeutet, du bist nicht eingeloggt oder die Session ist abgelaufen – neu einloggen.
 - **Foto-Import meldet "ANTHROPIC_API_KEY ist nicht konfiguriert":** Schritt 6b nachholen und danach ein Redeploy in Vercel auslösen (Umgebungsvariablen werden erst beim nächsten Deploy aktiv).
+- **YouTube-Import meldet "YOUTUBE_API_KEY ist nicht konfiguriert":** Schritt 6c nachholen und danach ein Redeploy in Vercel auslösen.
 
 Bei Bedarf kannst du mir jederzeit die Fehlermeldung schicken, dann schauen wir gemeinsam drauf.
