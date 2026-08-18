@@ -1422,3 +1422,65 @@ textarea { resize: vertical; font-family: var(--font-body); }
 }
 .cost-diff--over { color: var(--color-danger); }
 .cost-diff--under { color: var(--color-accent-dark); }
+
+
+/* ------------------------------ Responsive: Tablet-Anpassungen ------------------------------ */
+
+@media (min-width: 721px) and (max-width: 1024px) {
+     .detail-grid {
+            grid-template-columns: 260px 1fr;
+            gap: 1.25rem;
+     }
+     .timetable {
+            grid-template-columns: 90px repeat(7, minmax(108px, 1fr));
+            min-width: 690px;
+     }
+     .timetable-mealrow-label {
+            font-size: 0.72rem;
+            padding: 0.4rem 0.3rem;
+     }
+     .timetable-daylabel {
+            padding: 0.4rem 0.2rem;
+     }
+     .meal-entry-title {
+            font-size: 0.74rem;
+     }
+}
+
+/* ------------------------------ Responsive: Mobile Einkaufsliste ------------------------------ */
+
+@media (max-width: 640px) {
+     .shopping-item-row {
+            flex-wrap: wrap;
+            row-gap: 0.5rem;
+     }
+     .shopping-item-prices {
+            flex-basis: 100%;
+            order: 3;
+            margin-left: 2.35rem;
+     }
+     .shopping-item-actions {
+            order: 2;
+            margin-left: auto;
+     }
+     .price-field .price-input {
+            width: 56px;
+     }
+     .price-input-add {
+            width: 110px;
+     }
+}
+
+/* ------------------------------ Responsive: schmale Handys ------------------------------ */
+
+@media (max-width: 420px) {
+     .topbar-nav {
+            gap: 0.65rem;
+     }
+     .topbar-nav a {
+            font-size: 0.76rem;
+     }
+     .brand {
+            font-size: 1rem;
+     }
+}
