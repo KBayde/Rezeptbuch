@@ -11,6 +11,7 @@ export async function renderRecipeList(container) {
       </div>
       <div class="detail-actions">
         <a href="#/rezepte/foto-import" class="btn btn-secondary">📷 Per Foto erfassen</a>
+        <a href="#/rezepte/youtube-import" class="btn btn-secondary">▶️ Per YouTube-Link erfassen</a>
         <a href="#/rezepte/neu" class="btn btn-primary">+ Neues Rezept</a>
       </div>
     </div>

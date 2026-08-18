@@ -11,6 +11,7 @@ import {
 import { escapeHtml, SOURCE_TYPE_LABELS, MEAL_TYPES } from "./utils.js";
 import { navigate } from "./router.js";
 import { consumePhotoDraft } from "./photoImport.js";
+import { consumeYoutubeDraft } from "./youtubeImport.js";
 
 export async function renderRecipeForm(container, { id } = {}) {
   const isEdit = Boolean(id);
@@ -33,11 +34,12 @@ export async function renderRecipeForm(container, { id } = {}) {
     return;
   }
 
-  // Kommt man von der Foto-Import-Seite und hat gerade ein Rezept aus einem
-  // Foto erkannt bekommen, übernehmen wir diesen Entwurf hier als Vorbelegung
-  // (nur bei "Neues Rezept", nie beim Bearbeiten eines bestehenden).
+  // Kommt man von der Foto- oder YouTube-Import-Seite und hat gerade ein
+  // Rezept automatisch erkannt bekommen, übernehmen wir diesen Entwurf hier
+  // als Vorbelegung (nur bei "Neues Rezept", nie beim Bearbeiten eines
+  // bestehenden).
   if (!isEdit) {
-    const draft = consumePhotoDraft();
+    const draft = consumePhotoDraft() || consumeYoutubeDraft();
     if (draft) recipe = draft;
   }
 
