@@ -1,15 +1,21 @@
 // ============================================================================
 // Vercel Serverless Function: nimmt einen YouTube-Video-Link entgegen, liest
-// Titel, Kanalname und Videobeschreibung von der YouTube-Seite aus (ohne
-// offizielle API/Key nötig) und lässt daraus per Anthropic API (Claude) ein
-// strukturiertes Rezept extrahieren. Viele Koch-Kanäle schreiben das
-// vollständige Rezept in die Videobeschreibung - das ist die Hauptquelle
-// hier. Ein echtes Video-Transkript wird bewusst NICHT abgerufen (dafür
-// bräuchte es zusätzliche Untertitel-Infrastruktur); reicht die Beschreibung
+// Titel, Kanalname und Videobeschreibung über die offizielle YouTube Data
+// API v3 aus und lässt daraus per Anthropic API (Claude) ein strukturiertes
+// Rezept extrahieren. Viele Koch-Kanäle schreiben das vollständige Rezept in
+// die Videobeschreibung - das ist die Hauptquelle hier. Ein echtes
+// Video-Transkript wird bewusst NICHT abgerufen; reicht die Beschreibung
 // nicht aus, liefert Claude ein bestmögliches Teilergebnis, das die Nutzerin
 // im Formular danach ergänzen kann.
 //
-// Benötigt die Umgebungsvariable ANTHROPIC_API_KEY (wie beim Foto-Import).
+// HINWEIS: Ein direktes Auslesen der YouTube-Webseite (ohne offizielle API)
+// funktioniert von Cloud-Servern wie Vercel aus NICHT zuverlässig - YouTube
+// zeigt Anfragen aus Rechenzentrums-IP-Bereichen eine Bot-Sperre
+// ("playabilityStatus": "LOGIN_REQUIRED") statt der echten Seite. Deshalb
+// wird hier die offizielle, kostenlose YouTube Data API v3 verwendet.
+//
+// Benötigt die Umgebungsvariablen ANTHROPIC_API_KEY (wie beim Foto-Import)
+// und YOUTUBE_API_KEY (siehe DEPLOYMENT.md, Schritt 6c).
 // ============================================================================
 
 export const config = {
@@ -71,28 +77,6 @@ function extractVideoId(rawUrl) {
   return null;
 }
 
-function extractMetaContent(html, property) {
-  const re = new RegExp(`<meta property="${property}" content="([^"]*)"`, "i");
-  const m = html.match(re);
-  return m ? m[1].replace(/&quot;/g, '"').replace(/&amp;/g, "&") : "";
-}
-
-function extractDescription(html) {
-  const m = html.match(/"shortDescription":"((?:\\.|[^"\\])*)"/);
-  if (m) {
-    try {
-      return JSON.parse(`"${m[1]}"`);
-    } catch {
-    }
-  }
-  return extractMetaContent(html, "og:description");
-}
-
-function extractChannelName(html) {
-  const m = html.match(/"author":"([^"]+)"/);
-  return m ? m[1] : "";
-}
-
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     res.status(405).json({ error: "Method not allowed" });
@@ -104,6 +88,15 @@ export default async function handler(req, res) {
     res.status(500).json({
       error:
         "ANTHROPIC_API_KEY ist nicht konfiguriert. Bitte in den Vercel-Projekteinstellungen unter Settings -> Environment Variables hinterlegen und neu deployen.",
+    });
+    return;
+  }
+
+  const youtubeApiKey = process.env.YOUTUBE_API_KEY;
+  if (!youtubeApiKey) {
+    res.status(500).json({
+      error:
+        "YOUTUBE_API_KEY ist nicht konfiguriert. Bitte in den Vercel-Projekteinstellungen unter Settings -> Environment Variables hinterlegen (siehe DEPLOYMENT.md, Schritt 6c) und neu deployen.",
     });
     return;
   }
@@ -124,53 +117,44 @@ export default async function handler(req, res) {
   let description = "";
   let channel = "";
   try {
-    const pageRes = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
-      headers: {
-        "user-agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
-        "accept-language": "de-DE,de;q=0.9,en;q=0.8",
-        cookie: "CONSENT=YES+cb.20210328-17-p0.de+FX+119",
-      },
-    });
-    if (!pageRes.ok) {
-      throw new Error("YouTube-Seite konnte nicht geladen werden (Status " + pageRes.status + ").");
+    const apiUrl =
+      "https://www.googleapis.com/youtube/v3/videos?part=snippet&id=" +
+      encodeURIComponent(videoId) +
+      "&key=" +
+      encodeURIComponent(youtubeApiKey);
+    const ytRes = await fetch(apiUrl);
+    const ytData = await ytRes.json();
+
+    if (!ytRes.ok) {
+      const reason =
+        (ytData && ytData.error && ytData.error.message) || "Unbekannter Fehler bei der YouTube API.";
+      throw new Error(reason);
     }
-    const html = await pageRes.text();
-    globalThis.__lastHtml = html;
-    globalThis.__lastStatus = pageRes.status;
-    title = extractMetaContent(html, "og:title");
-    description = extractDescription(html);
-    channel = extractChannelName(html);
+
+    const item = (ytData.items || [])[0];
+    if (!item) {
+      res.status(404).json({
+        error: "Video wurde nicht gefunden. Bitte den Link prüfen (evtl. privates oder gelöschtes Video).",
+      });
+      return;
+    }
+
+    title = item.snippet.title || "";
+    description = item.snippet.description || "";
+    channel = item.snippet.channelTitle || "";
   } catch (err) {
     res.status(502).json({
       error:
-        "Videodaten konnten nicht von YouTube geladen werden: " +
+        "Videodaten konnten nicht von der YouTube API geladen werden: " +
         (err && err.message ? err.message : String(err)),
     });
     return;
   }
 
   if (!title && !description) {
-    const h = globalThis.__lastHtml || "";
-    const ogIdx = h.indexOf('property="og:title"');
-    const shortDescIdx = h.indexOf('"shortDescription"');
-    const consentIdx = h.toLowerCase().indexOf("consent.youtube.com");
-    const captchaIdx = h.toLowerCase().indexOf("captcha");
-    const errorPlayabilityIdx = h.indexOf('"playabilityStatus"');
-    const statusIdx = h.indexOf('"status":"');
     res.status(422).json({
       error:
         "Für dieses Video konnten weder Titel noch Beschreibung gelesen werden. Bitte den Link prüfen oder das Rezept manuell anlegen.",
-      debugStatus: globalThis.__lastStatus,
-      debugHtmlLength: h.length,
-      debugOgTitleFound: ogIdx !== -1,
-      debugOgTitleSnippet: ogIdx !== -1 ? h.slice(ogIdx, ogIdx + 200) : null,
-      debugShortDescFound: shortDescIdx !== -1,
-      debugConsentIdx: consentIdx,
-      debugCaptchaIdx: captchaIdx,
-      debugPlayabilityFound: errorPlayabilityIdx !== -1,
-      debugPlayabilitySnippet: errorPlayabilityIdx !== -1 ? h.slice(errorPlayabilityIdx, errorPlayabilityIdx + 300) : null,
-      debugStatusSnippet: statusIdx !== -1 ? h.slice(statusIdx, statusIdx + 100) : null,
     });
     return;
   }
