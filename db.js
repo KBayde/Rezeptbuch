@@ -894,3 +894,57 @@ export async function getPriceTrendForIngredient(ingredientName) {
     };
 }
 
+  function normalizeIngredientName(name) {
+      return (name || "").trim().toLowerCase();
+  }
+
+function ingredientNamesMatch(a, b) {
+    if (!a || !b) return false;
+    if (a === b) return true;
+    return a.length >= 3 && b.length >= 3 && (a.includes(b) || b.includes(a));
+}
+
+export async function suggestRecipesFromInventory(limit = 6) {
+    const [inventory, recipes] = await Promise.all([listInventoryItems(), listRecipes()]);
+    if (inventory.length === 0 || recipes.length === 0) return [];
+
+    const soonLimit = new Date();
+    soonLimit.setDate(soonLimit.getDate() + 4);
+
+    const inventoryEntries = inventory.map((item) => ({
+          name: normalizeIngredientName(item.name),
+          expiringSoon: !!item.expiryDate && new Date(`${item.expiryDate}T00:00:00`) <= soonLimit,
+    }));
+
+    const suggestions = [];
+    for (const recipe of recipes) {
+          if (!recipe.ingredients || recipe.ingredients.length === 0) continue;
+          const matchedIngredients = [];
+          let expiringMatchedCount = 0;
+          for (const ing of recipe.ingredients) {
+                  const ingName = normalizeIngredientName(ing.ingredientName);
+                  if (!ingName) continue;
+                  const hit = inventoryEntries.find((inv) => ingredientNamesMatch(inv.name, ingName));
+                  if (hit) {
+                            matchedIngredients.push(ing.ingredientName);
+                            if (hit.expiringSoon) expiringMatchedCount++;
+                  }
+          }
+          if (matchedIngredients.length === 0) continue;
+          const matchRatio = matchedIngredients.length / recipe.ingredients.length;
+          const score = matchRatio * 100 + expiringMatchedCount * 15;
+          suggestions.push({
+                  recipe,
+                  matchedCount: matchedIngredients.length,
+                  totalCount: recipe.ingredients.length,
+                  matchRatio,
+                  matchedIngredients,
+                  expiringMatchedCount,
+                  score,
+          });
+    }
+
+    suggestions.sort((a, b) => b.score - a.score);
+    return suggestions.slice(0, limit);
+}
+
