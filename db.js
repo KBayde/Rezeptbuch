@@ -676,6 +676,21 @@ export async function listInventoryItems() {
   return data.map(normalizeInventoryItem);
 }
 
+export async function getExpiringInventoryItems(days = 3) {
+    const today = new Date();
+    const limit = new Date(today);
+    limit.setDate(limit.getDate() + days);
+    const limitIso = limit.toISOString().slice(0, 10);
+    const { data, error } = await supabase
+          .from("inventory_items")
+          .select("*")
+          .not("expiry_date", "is", null)
+          .lte("expiry_date", limitIso)
+          .order("expiry_date", { ascending: true });
+    if (error) throw error;
+    return data.map(normalizeInventoryItem);
+}
+
 export async function addInventoryItem(item) {
   const { error } = await supabase.from("inventory_items").insert({
     name: item.name,
