@@ -12,6 +12,7 @@ import { escapeHtml, SOURCE_TYPE_LABELS, MEAL_TYPES } from "./utils.js";
 import { navigate } from "./router.js";
 import { consumePhotoDraft } from "./photoImport.js";
 import { consumeYoutubeDraft } from "./youtubeImport.js";
+import { consumeLinkDraft } from "./linkImport.js";
 
 export async function renderRecipeForm(container, { id } = {}) {
   const isEdit = Boolean(id);
@@ -39,7 +40,7 @@ export async function renderRecipeForm(container, { id } = {}) {
   // als Vorbelegung (nur bei "Neues Rezept", nie beim Bearbeiten eines
   // bestehenden).
   if (!isEdit) {
-    const draft = consumePhotoDraft() || consumeYoutubeDraft();
+    const draft = consumePhotoDraft() || consumeYoutubeDraft() || consumeLinkDraft();
     if (draft) recipe = draft;
   }
 

@@ -8,6 +8,7 @@ import { renderMealPlan } from "./mealPlan.js";
 import { renderShoppingList } from "./shoppingList.js";
 import { renderPhotoImport } from "./photoImport.js";
 import { renderYoutubeImport } from "./youtubeImport.js";
+import { renderLinkImport } from "./linkImport.js";
 import { renderInventory } from "./inventory.js";
 
 let currentSession = null;
@@ -53,6 +54,10 @@ function registerRoutes() {
   route("/rezepte/youtube-import", async () => {
     const container = document.getElementById("app");
     await renderYoutubeImport(container);
+  });
+  route("/rezepte/link-import", async () => {
+    const container = document.getElementById("app");
+    await renderLinkImport(container);
   });
   route("/rezepte/:id/bearbeiten", async (params) => {
     const container = document.getElementById("app");

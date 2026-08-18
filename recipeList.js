@@ -10,8 +10,9 @@ export async function renderRecipeList(container) {
         <p class="text-muted" id="recipe-count"></p>
       </div>
       <div class="detail-actions">
-        <a href="#/rezepte/foto-import" class="btn btn-secondary">📷 Per Foto erfassen</a>
-        <a href="#/rezepte/youtube-import" class="btn btn-secondary">▶️ Per YouTube-Link erfassen</a>
+        <a href="#/rezepte/foto-import" class="btn btn-secondary">📷 Per Foto</a>
+        <a href="#/rezepte/youtube-import" class="btn btn-secondary">▶️ Per YouTube</a>
+        <a href="#/rezepte/link-import" class="btn btn-secondary">🔗 Per Link</a>
         <a href="#/rezepte/neu" class="btn btn-primary">+ Neues Rezept</a>
       </div>
     </div>
