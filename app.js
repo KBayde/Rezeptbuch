@@ -10,6 +10,7 @@ import { renderPhotoImport } from "./photoImport.js";
 import { renderYoutubeImport } from "./youtubeImport.js";
 import { renderLinkImport } from "./linkImport.js";
 import { renderInventory } from "./inventory.js";
+import { renderHouseholdCosts } from "./costs.js";
 
 let currentSession = null;
 
@@ -23,6 +24,7 @@ function renderShell() {
           <a href="#/wochenplan">Wochenplan</a>
           <a href="#/einkaufsliste">Einkaufsliste</a>
           <a href="#/vorrat">Vorrat</a>
+          <a href="#/haushaltskosten">Kosten</a>
         </nav>
         <button id="logout-btn" class="btn btn-ghost btn-small">Abmelden</button>
       </header>
@@ -78,6 +80,10 @@ function registerRoutes() {
   route("/vorrat", async () => {
     const container = document.getElementById("app");
     await renderInventory(container);
+  });
+  route("/haushaltskosten", async () => {
+    const container = document.getElementById("app");
+    await renderHouseholdCosts(container);
   });
 }
 
