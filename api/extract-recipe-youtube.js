@@ -132,6 +132,11 @@ export default async function handler(req, res) {
         "user-agent":
           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
         "accept-language": "de-DE,de;q=0.9,en;q=0.8",
+        // Server läuft in der EU (Vercel-Region fra1). Ohne dieses Cookie
+        // zeigt YouTube EU-IPs statt der echten Videoseite einen
+        // Cookie-Consent-Zwischenschritt ("Bevor es weitergeht ...") ohne
+        // og:title/Beschreibung - dieses Cookie umgeht den Consent-Wall.
+        cookie: "CONSENT=YES+cb.20210328-17-p0.de+FX+119",
       },
     });
     if (!pageRes.ok) {
