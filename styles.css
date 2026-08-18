@@ -1527,3 +1527,72 @@ textarea { resize: vertical; font-family: var(--font-body); }
      height: 120px;
 }
 
+
+/* ------------------------------ Wochenplan-Vorschläge aus dem Vorrat ------------------------------ */
+
+.suggestion-card {
+     margin-bottom: 1.25rem;
+}
+.suggestion-list {
+     display: flex;
+     flex-direction: column;
+     gap: 0.75rem;
+     margin-top: 0.75rem;
+}
+.suggestion-item {
+     display: flex;
+     align-items: center;
+     gap: 0.85rem;
+     padding: 0.6rem;
+     background: var(--color-surface-alt);
+     border-radius: var(--radius-md);
+}
+.suggestion-image {
+     width: 52px;
+     height: 52px;
+     border-radius: var(--radius-sm);
+     object-fit: cover;
+     flex-shrink: 0;
+}
+.suggestion-image--empty {
+     display: flex;
+     align-items: center;
+     justify-content: center;
+     font-size: 1.4rem;
+     background: var(--color-surface);
+}
+.suggestion-body {
+     flex: 1;
+     min-width: 0;
+     display: flex;
+     flex-direction: column;
+     gap: 0.3rem;
+}
+.suggestion-title {
+     font-weight: 600;
+     color: var(--color-text);
+     text-decoration: none;
+}
+.suggestion-title:hover {
+     text-decoration: underline;
+}
+.suggestion-chip {
+     font-size: 0.75rem;
+}
+.suggestion-chip--expiring {
+     background: var(--color-highlight-tint);
+     color: #9a6a12;
+}
+.suggestion-add {
+     flex-shrink: 0;
+     white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+     .suggestion-item {
+            flex-wrap: wrap;
+     }
+     .suggestion-add {
+            flex-basis: 100%;
+     }
+}
