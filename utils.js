@@ -142,6 +142,14 @@ export function daysUntil(dateStr) {
   return Math.round((target - today) / 86400000);
 }
 
+// --------------------------- Preise (Einkaufsliste / Kosten-Tracker) ---------------------------
+
+/** Formatiert einen Preis mit Komma und zwei Nachkommastellen, z. B. "3,50". */
+export function formatPrice(value) {
+    if (value === null || value === undefined || Number.isNaN(Number(value))) return "";
+    return Number(value).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
 // --------------------------- Zutaten-Kategorien (Einkaufsliste) ---------------------------
 
 // Stichwort-basierte, bewusst grobe Zuordnung (keine Lebensmitteldatenbank
