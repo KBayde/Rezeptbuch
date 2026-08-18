@@ -19,7 +19,7 @@ export function escapeHtml(value) {
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
+    .replaceAll("\'", "&#39;");
 }
 
 const FRACTIONS = [
@@ -140,4 +140,102 @@ export function daysUntil(dateStr) {
   today.setHours(0, 0, 0, 0);
   const target = new Date(`${dateStr}T00:00:00`);
   return Math.round((target - today) / 86400000);
+}
+
+// --------------------------- Zutaten-Kategorien (Einkaufsliste) ---------------------------
+
+// Stichwort-basierte, bewusst grobe Zuordnung (keine Lebensmitteldatenbank
+// vorhanden). Reihenfolge der Kategorien ist relevant: Es gewinnt die erste
+// Kategorie, deren Stichwort im (kleingeschriebenen) Zutatnamen vorkommt.
+// Kurze, kollisionsanfällige Stichwörter (z. B. bloßes "ei") werden bewusst
+// vermieden, damit z. B. "Fleisch" nicht fälschlich bei Milchprodukten landet.
+const CATEGORY_RULES = [
+  {
+    key: "meat",
+    label: "Fleisch & Fisch",
+    icon: "🥩",
+    keywords: [
+      "hähnchen", "huhn", "pute", "rind", "schwein", "hack", "wurst", "speck",
+      "bacon", "lachs", "fisch", "garnele", "shrimp", "thunfisch", "salami",
+      "schinken", "geflügel", "lamm", "ente", "leberkäse",
+    ],
+  },
+  {
+    key: "dairy",
+    label: "Milchprodukte & Eier",
+    icon: "🥛",
+    keywords: [
+      "milch", "käse", "joghurt", "quark", "sahne", "butter", "frischkäse",
+      "mozzarella", "parmesan", "feta", "eier", "hühnerei", "buttermilch",
+      "kefir", "schmand", "creme fraiche", "crème fraîche", "ricotta",
+    ],
+  },
+  {
+    key: "produce",
+    label: "Obst & Gemüse",
+    icon: "🥬",
+    keywords: [
+      "apfel", "banane", "tomate", "salat", "gurke", "zwiebel", "knoblauch",
+      "kartoffel", "karotte", "möhre", "paprika", "zucchini", "pilz",
+      "champignon", "spinat", "brokkoli", "rucola", "zitrone", "limette",
+      "avocado", "ingwer", "chili", "kohl", "lauch", "sellerie", "radieschen",
+      "obst", "gemüse", "beere", "birne", "orange", "mango", "ananas",
+      "trauben", "kürbis", "mais", "erbsen", "aubergine", "kräuter",
+      "petersilie", "basilikum", "koriander", "schnittlauch", "minze", "dill",
+    ],
+  },
+  {
+    key: "bakery",
+    label: "Backwaren",
+    icon: "🍞",
+    keywords: ["brot", "brötchen", "baguette", "toast", "tortilla", "wrap", "pita", "croissant"],
+  },
+  {
+    key: "frozen",
+    label: "Tiefkühl",
+    icon: "🧊",
+    keywords: ["tiefkühl", "tiefgefroren", "tk-", "pommes", "eis"],
+  },
+  {
+    key: "beverages",
+    label: "Getränke",
+    icon: "🥤",
+    keywords: ["wasser", "saft", "cola", "limonade", "bier", "wein", "kaffee", "tee"],
+  },
+  {
+    key: "spices",
+    label: "Gewürze & Saucen",
+    icon: "🧂",
+    keywords: [
+      "pfeffer", "curry", "paprikapulver", "oregano", "thymian", "rosmarin",
+      "zimt", "vanille", "senf", "ketchup", "mayonnaise", "sojasauce", "salz",
+      "gewürz", "essig",
+    ],
+  },
+  {
+    key: "pantry",
+    label: "Trockenwaren & Vorrat",
+    icon: "🥫",
+    keywords: [
+      "reis", "nudel", "pasta", "spaghetti", "linsen", "bohnen", "kichererbsen",
+      "konserve", "dose", "brühe", "mehl", "haferflocken", "müsli", "honig",
+      "marmelade", "zucker", "öl", "nüsse", "mandel",
+    ],
+  },
+];
+
+const OTHER_CATEGORY = { key: "other", label: "Sonstiges", icon: "🛒" };
+
+/** Anzeigereihenfolge der Kategorien (inkl. "Sonstiges" als letzte Gruppe). */
+export const CATEGORY_ORDER = [...CATEGORY_RULES.map((c) => c.key), OTHER_CATEGORY.key];
+
+/** Ordnet einen Zutatnamen per Stichwortsuche einer Einkaufslisten-Kategorie zu. */
+export function categorizeIngredient(name) {
+  const n = (name || "").toLowerCase();
+  for (const cat of CATEGORY_RULES) {
+    if (cat.keywords.some((kw) => n.includes(kw))) {
+      return { key: cat.key, label: cat.label, icon: cat.icon };
+    }
+  }
+  return OTHER_CATEGORY;
 }

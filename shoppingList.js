@@ -6,7 +6,7 @@ import {
   clearCheckedShoppingListItems,
   addInventoryItem,
 } from "./db.js";
-import { escapeHtml, formatQuantity } from "./utils.js";
+import { escapeHtml, formatQuantity, categorizeIngredient, CATEGORY_ORDER } from "./utils.js";
 
 export async function renderShoppingList(container) {
   container.innerHTML = `
@@ -23,7 +23,7 @@ export async function renderShoppingList(container) {
       <button type="submit" class="btn btn-primary">+ Hinzufügen</button>
     </form>
 
-    <ul id="shopping-items" class="shopping-list"></ul>
+    <div id="shopping-items" class="shopping-list"></div>
     <p id="shopping-empty" class="empty-state" hidden>Deine Einkaufsliste ist leer.</p>
 
     <div class="week-footer">
@@ -46,6 +46,7 @@ export async function renderShoppingList(container) {
   let currentItems = [];
 
   function itemHtml(item) {
+    const cat = categorizeIngredient(item.name);
     const qtyLabel =
       item.quantity !== null
         ? `${formatQuantity(item.quantity)}${item.unit ? " " + escapeHtml(item.unit) : ""}`
@@ -64,6 +65,7 @@ export async function renderShoppingList(container) {
     return `
       <li class="shopping-item ${item.checked ? "shopping-item--checked" : ""}" data-item-id="${item.id}">
         <div class="shopping-item-row">
+          <span class="shopping-item-icon" title="${escapeHtml(cat.label)}">${cat.icon}</span>
           <label class="shopping-item-label">
             <input
               type="checkbox" class="shopping-item-checkbox"
@@ -85,6 +87,33 @@ export async function renderShoppingList(container) {
           <button type="button" class="btn btn-ghost btn-small qa-cancel">Abbrechen</button>
         </form>
       </li>
+    `;
+  }
+
+  // Gruppiert die Posten nach Kategorie (Obst & Gemüse, Milchprodukte, ...)
+  // in fester Anzeigereihenfolge, "Sonstiges" immer zuletzt.
+  function groupByCategory(items) {
+    const groups = new Map();
+    for (const item of items) {
+      const cat = categorizeIngredient(item.name);
+      if (!groups.has(cat.key)) groups.set(cat.key, { ...cat, items: [] });
+      groups.get(cat.key).items.push(item);
+    }
+    return CATEGORY_ORDER.filter((key) => groups.has(key)).map((key) => groups.get(key));
+  }
+
+  function groupHtml(group) {
+    return `
+      <section class="shopping-category">
+        <h2 class="shopping-category-header">
+          <span class="shopping-category-icon">${group.icon}</span>
+          ${escapeHtml(group.label)}
+          <span class="shopping-category-count">${group.items.length}</span>
+        </h2>
+        <ul class="shopping-category-items">
+          ${group.items.map(itemHtml).join("")}
+        </ul>
+      </section>
     `;
   }
 
@@ -174,7 +203,8 @@ export async function renderShoppingList(container) {
     moveCheckedBtn.disabled = checkedCount === 0;
     clearCheckedBtn.disabled = checkedCount === 0;
 
-    list.innerHTML = items.map(itemHtml).join("");
+    const groups = groupByCategory(items);
+    list.innerHTML = groups.map(groupHtml).join("");
     wireItems();
   }
 
