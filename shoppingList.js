@@ -40,6 +40,8 @@ export async function renderShoppingList(container) {
     const qtyLabel =
       item.quantity !== null
         ? `${formatQuantity(item.quantity)}${item.unit ? " " + escapeHtml(item.unit) : ""}`
+        : item.unit
+        ? escapeHtml(item.unit)
         : "";
     return `
       <li class="shopping-item ${item.checked ? "shopping-item--checked" : ""}" data-item-id="${item.id}">

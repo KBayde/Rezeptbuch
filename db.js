@@ -5,6 +5,7 @@
 // einfach: neue Funktionen hier ergänzen, Views bleiben unangetastet.
 // ============================================================================
 import { supabase } from "./supabaseClient.js";
+import { formatQuantity } from "./utils.js";
 
 // Name des Supabase Storage Buckets für Rezeptbilder (muss im Dashboard
 // als "Public bucket" angelegt sein, siehe DEPLOYMENT.md).
@@ -166,7 +167,7 @@ export async function removeCoverImage(recipeId) {
 
 const RECIPE_SELECT = `
   id, title, source_type, source_text, source_url, prep_time_minutes,
-  servings_base, notes, created_at, updated_at,
+  servings_base, notes, meal_types, created_at, updated_at,
   recipe_steps ( id, step_number, instruction ),
   recipe_ingredients ( id, quantity, note, sort_order,
     ingredients ( id, name ),
@@ -196,6 +197,7 @@ function normalizeRecipe(row) {
     prepTimeMinutes: row.prep_time_minutes,
     servingsBase: Number(row.servings_base),
     notes: row.notes,
+    mealTypes: row.meal_types || [],
     images,
     imageUrl: cover?.url ?? null,
     createdAt: row.created_at,
@@ -256,6 +258,7 @@ export async function createRecipe(form) {
       prep_time_minutes: form.prepTimeMinutes,
       servings_base: form.servingsBase,
       notes: form.notes || null,
+      meal_types: form.mealTypes || [],
     })
     .select()
     .single();
@@ -276,6 +279,7 @@ export async function updateRecipe(id, form) {
       prep_time_minutes: form.prepTimeMinutes,
       servings_base: form.servingsBase,
       notes: form.notes || null,
+      meal_types: form.mealTypes || [],
     })
     .eq("id", id);
   if (error) throw error;
@@ -452,13 +456,45 @@ export async function clearCheckedShoppingListItems() {
   if (error) throw error;
 }
 
+// Einheiten, die sich sinnvoll ineinander umrechnen lassen, damit z. B.
+// "500 g" aus einem Rezept und "0,5 kg" aus einem anderen als EINE Zutat
+// zusammengezählt werden statt als zwei getrennte Einkaufsliste-Zeilen.
+// canonical = die Einheit, in der intern aufsummiert wird; factor = wie
+// viele "canonical"-Einheiten in einer Einheit dieser Zeile stecken.
+const UNIT_CONVERSIONS = {
+  g: { canonical: "g", factor: 1 },
+  kg: { canonical: "g", factor: 1000 },
+  ml: { canonical: "ml", factor: 1 },
+  l: { canonical: "ml", factor: 1000 },
+  TL: { canonical: "TL", factor: 1 },
+  EL: { canonical: "TL", factor: 3 },
+};
+
+/** Wählt für eine aufsummierte "canonical"-Menge die am besten lesbare Einheit. */
+function humanizeCanonicalAmount(canonicalUnit, amount) {
+  if (canonicalUnit === "g" && amount >= 1000) {
+    return { quantity: Math.round((amount / 1000) * 100) / 100, unit: "kg" };
+  }
+  if (canonicalUnit === "ml" && amount >= 1000) {
+    return { quantity: Math.round((amount / 1000) * 100) / 100, unit: "l" };
+  }
+  if (canonicalUnit === "TL" && amount >= 3 && Math.round(amount) % 3 === 0) {
+    return { quantity: Math.round(amount) / 3, unit: "EL" };
+  }
+  return { quantity: amount, unit: canonicalUnit };
+}
+
 /**
  * Baut die Einkaufsliste aus allen Rezepten neu, die im Datumsbereich
  * [startDate, endDate] eingeplant sind: Mengen werden über alle Rezepte
- * hinweg pro Zutat+Einheit aufsummiert (skaliert auf die geplante
- * Portionenzahl). Nur automatisch erzeugte Positionen ("plan") werden
- * ersetzt – manuell hinzugefügte Items und ihr Abhak-Status bleiben erhalten.
- * Gibt die Anzahl der erzeugten Positionen zurück.
+ * hinweg pro Zutat aufsummiert (skaliert auf die geplante Portionenzahl).
+ * Gleiche Zutaten mit kompatiblen Einheiten (g/kg, ml/l, TL/EL) werden
+ * umgerechnet und zusammengezählt. Bleiben nach der Umrechnung trotzdem
+ * mehrere, nicht vergleichbare Angaben übrig (z. B. "2 TL" und "nach
+ * Geschmack"), landen sie als EIN kombinierter Text in einer einzigen
+ * Zeile statt als Duplikate. Nur automatisch erzeugte Positionen ("plan")
+ * werden ersetzt – manuell hinzugefügte Items und ihr Abhak-Status bleiben
+ * erhalten. Gibt die Anzahl der erzeugten Positionen zurück.
  */
 export async function generateShoppingList(startDate, endDate) {
   const entries = await listMealPlanEntries(startDate, endDate);
@@ -483,7 +519,10 @@ export async function generateShoppingList(startDate, endDate) {
   if (fetchError) throw fetchError;
 
   const recipesById = new Map(recipeRows.map((r) => [r.id, r]));
-  const aggregated = new Map(); // "name|unit" -> { name, unit, quantity }
+  // Zutaten werden zuerst nur nach NAME gruppiert (nicht mehr nach
+  // Name+Einheit) – die konkreten Mengen/Einheiten sammeln sich in
+  // "subgroups" darunter und werden erst danach zusammengeführt.
+  const byName = new Map(); // nameLower -> { name, subgroups: Map(subKey -> {quantity, unit, canonical}) }
 
   for (const entry of entries) {
     const recipe = recipesById.get(entry.recipeId);
@@ -494,26 +533,70 @@ export async function generateShoppingList(startDate, endDate) {
     for (const ri of recipe.recipe_ingredients) {
       const name = ri.ingredients?.name?.trim();
       if (!name) continue;
-      const unit = ri.units?.abbreviation || "";
-      const key = `${name.toLowerCase()}|${unit}`;
+      const nameKey = name.toLowerCase();
+      const rawUnit = ri.units?.abbreviation || "";
+
+      if (!byName.has(nameKey)) byName.set(nameKey, { name, subgroups: new Map() });
+      const group = byName.get(nameKey);
 
       if (ri.quantity === null) {
-        // z. B. "nach Geschmack" – ohne Menge, nur einmal auflisten
-        if (!aggregated.has(key)) aggregated.set(key, { name, unit, quantity: null });
+        // z. B. "nach Geschmack" – ohne Menge, nur einmal je Einheit auflisten
+        const subKey = `text|${rawUnit}`;
+        if (!group.subgroups.has(subKey)) {
+          group.subgroups.set(subKey, { quantity: null, unit: rawUnit });
+        }
         continue;
       }
 
       const scaled = Number(ri.quantity) * ratio;
-      const existing = aggregated.get(key);
-      if (existing && existing.quantity !== null) {
-        existing.quantity += scaled;
+      const conversion = UNIT_CONVERSIONS[rawUnit];
+
+      if (conversion) {
+        const subKey = `unit|${conversion.canonical}`;
+        const amount = scaled * conversion.factor;
+        const existing = group.subgroups.get(subKey);
+        if (existing) {
+          existing.quantity += amount;
+        } else {
+          group.subgroups.set(subKey, { quantity: amount, unit: conversion.canonical, canonical: true });
+        }
       } else {
-        aggregated.set(key, { name, unit, quantity: scaled });
+        const subKey = `unit|${rawUnit}`;
+        const existing = group.subgroups.get(subKey);
+        if (existing) {
+          existing.quantity += scaled;
+        } else {
+          group.subgroups.set(subKey, { quantity: scaled, unit: rawUnit });
+        }
       }
     }
   }
 
-  const items = [...aggregated.values()].sort((a, b) => a.name.localeCompare(b.name, "de"));
+  const items = [];
+  for (const { name, subgroups } of byName.values()) {
+    const parts = [...subgroups.values()].map((sg) => {
+      if (sg.quantity === null) return { quantity: null, unit: sg.unit || "" };
+      const human = sg.canonical ? humanizeCanonicalAmount(sg.unit, sg.quantity) : { quantity: sg.quantity, unit: sg.unit };
+      return human;
+    });
+
+    if (parts.length === 1) {
+      const p = parts[0];
+      items.push({ name, quantity: p.quantity, unit: p.unit || null });
+    } else {
+      // Mehrere unterschiedliche/unvergleichbare Einheiten für dieselbe
+      // Zutat übrig – zu einem lesbaren Text zusammenfassen, damit die
+      // Zutat trotzdem nur EINMAL in der Liste auftaucht.
+      const combinedText = parts
+        .map((p) =>
+          p.quantity !== null ? `${formatQuantity(p.quantity)}${p.unit ? " " + p.unit : ""}` : p.unit || "nach Geschmack"
+        )
+        .join(" + ");
+      items.push({ name, quantity: null, unit: combinedText });
+    }
+  }
+
+  items.sort((a, b) => a.name.localeCompare(b.name, "de"));
 
   const { error: deleteError } = await supabase
     .from("shopping_list_items")

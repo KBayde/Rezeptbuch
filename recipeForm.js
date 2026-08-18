@@ -8,7 +8,7 @@ import {
   replaceCoverImage,
   removeCoverImage,
 } from "./db.js";
-import { escapeHtml, SOURCE_TYPE_LABELS } from "./utils.js";
+import { escapeHtml, SOURCE_TYPE_LABELS, MEAL_TYPES } from "./utils.js";
 import { navigate } from "./router.js";
 import { consumePhotoDraft } from "./photoImport.js";
 
@@ -52,6 +52,7 @@ export async function renderRecipeForm(container, { id } = {}) {
         }))
       : [{ name: "", quantity: "", unitAbbreviation: "", note: "" }],
     tags: recipe ? [...recipe.tags] : [],
+    mealTypes: recipe ? [...(recipe.mealTypes || [])] : [],
     imageFile: null,
     removeImage: false,
   };
@@ -127,6 +128,11 @@ export async function renderRecipeForm(container, { id } = {}) {
             ${existingTags.map((t) => `<option value="${escapeHtml(t.name)}"></option>`).join("")}
           </datalist>
         </label>
+
+        <label class="field">
+          <span>Für welche Mahlzeiten geeignet? (optional)</span>
+          <div id="mealtype-picker" class="mealtype-picker"></div>
+        </label>
       </section>
 
       <section class="card stack-md">
@@ -166,6 +172,7 @@ export async function renderRecipeForm(container, { id } = {}) {
 
   const tagEditor = container.querySelector("#tag-editor");
   const tagInput = container.querySelector("#tag-input");
+  const mealTypePicker = container.querySelector("#mealtype-picker");
   const ingredientsEditor = container.querySelector("#ingredients-editor");
   const stepsEditor = container.querySelector("#steps-editor");
 
@@ -219,6 +226,29 @@ export async function renderRecipeForm(container, { id } = {}) {
     if (!btn) return;
     state.tags.splice(Number(btn.dataset.removeTag), 1);
     renderTags();
+  });
+
+  function renderMealTypePicker() {
+    mealTypePicker.innerHTML = MEAL_TYPES.map(
+      (mt) => `
+        <button
+          type="button"
+          class="chip chip-toggle ${state.mealTypes.includes(mt.key) ? "chip-toggle--active" : ""}"
+          data-mealtype="${mt.key}"
+        >${mt.icon} ${escapeHtml(mt.label)}</button>
+      `
+    ).join("");
+  }
+  mealTypePicker.addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-mealtype]");
+    if (!btn) return;
+    const key = btn.dataset.mealtype;
+    if (state.mealTypes.includes(key)) {
+      state.mealTypes = state.mealTypes.filter((k) => k !== key);
+    } else {
+      state.mealTypes.push(key);
+    }
+    renderMealTypePicker();
   });
 
   function renderIngredients() {
@@ -312,6 +342,7 @@ export async function renderRecipeForm(container, { id } = {}) {
   }
 
   renderTags();
+  renderMealTypePicker();
   renderIngredients();
   renderSteps();
 
@@ -351,6 +382,7 @@ export async function renderRecipeForm(container, { id } = {}) {
       ingredients: cleanIngredients,
       steps: cleanSteps,
       tags: state.tags,
+      mealTypes: state.mealTypes,
     };
 
     if (!payload.title) {

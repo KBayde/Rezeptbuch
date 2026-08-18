@@ -80,8 +80,14 @@ export async function renderMealPlan(container) {
 
   twoDayToggle.addEventListener("click", () => setArmTwoDays(!armTwoDays));
 
-  function recipeOptionsHtml() {
-    return allRecipes.map((r) => `<option value="${r.id}">${escapeHtml(r.title)}</option>`).join("");
+  // Rezepte ohne Mahlzeit-Zuordnung (mealTypes leer, z. B. noch nicht
+  // eingepflegt) erscheinen weiterhin bei jeder Mahlzeit zur Auswahl.
+  // Rezepte MIT Zuordnung erscheinen nur bei den passenden Zeilen.
+  function recipeOptionsHtml(mealTypeKey) {
+    return allRecipes
+      .filter((r) => !r.mealTypes || r.mealTypes.length === 0 || r.mealTypes.includes(mealTypeKey))
+      .map((r) => `<option value="${r.id}">${escapeHtml(r.title)}</option>`)
+      .join("");
   }
 
   function entryChipHtml(entry) {
@@ -104,9 +110,9 @@ export async function renderMealPlan(container) {
     return `
       <div class="timetable-cell" data-date="${iso}" data-meal-type="${mealTypeKey}">
         <div class="meal-entries">${entriesHtml}</div>
-        <select class="meal-add-select" data-date="${iso}" data-meal-type="${mealTypeKey}">
+        <select class="meal-add-select meal-add-select--${mealTypeKey}" data-date="${iso}" data-meal-type="${mealTypeKey}">
           <option value="">+ Rezept…</option>
-          ${recipeOptionsHtml()}
+          ${recipeOptionsHtml(mealTypeKey)}
         </select>
       </div>
     `;
