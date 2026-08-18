@@ -1173,3 +1173,8 @@ textarea { resize: vertical; font-family: var(--font-body); }
      flex-direction: column;
      gap: 0.5rem;
 }
+
+
+.detail-actions {
+   flex-wrap: wrap;
+}
