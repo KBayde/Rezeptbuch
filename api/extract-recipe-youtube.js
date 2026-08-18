@@ -78,14 +78,11 @@ function extractMetaContent(html, property) {
 }
 
 function extractDescription(html) {
-  // YouTube bettet die vollständige Beschreibung als JSON-String im
-  // "shortDescription"-Feld von ytInitialData in die Seite ein.
   const m = html.match(/"shortDescription":"((?:\\.|[^"\\])*)"/);
   if (m) {
     try {
       return JSON.parse(`"${m[1]}"`);
     } catch {
-      // fällt durch auf og:description
     }
   }
   return extractMetaContent(html, "og:description");
@@ -132,10 +129,6 @@ export default async function handler(req, res) {
         "user-agent":
           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
         "accept-language": "de-DE,de;q=0.9,en;q=0.8",
-        // Server läuft in der EU (Vercel-Region fra1). Ohne dieses Cookie
-        // zeigt YouTube EU-IPs statt der echten Videoseite einen
-        // Cookie-Consent-Zwischenschritt ("Bevor es weitergeht ...") ohne
-        // og:title/Beschreibung - dieses Cookie umgeht den Consent-Wall.
         cookie: "CONSENT=YES+cb.20210328-17-p0.de+FX+119",
       },
     });
@@ -158,12 +151,26 @@ export default async function handler(req, res) {
   }
 
   if (!title && !description) {
+    const h = globalThis.__lastHtml || "";
+    const ogIdx = h.indexOf('property="og:title"');
+    const shortDescIdx = h.indexOf('"shortDescription"');
+    const consentIdx = h.toLowerCase().indexOf("consent.youtube.com");
+    const captchaIdx = h.toLowerCase().indexOf("captcha");
+    const errorPlayabilityIdx = h.indexOf('"playabilityStatus"');
+    const statusIdx = h.indexOf('"status":"');
     res.status(422).json({
       error:
         "Für dieses Video konnten weder Titel noch Beschreibung gelesen werden. Bitte den Link prüfen oder das Rezept manuell anlegen.",
       debugStatus: globalThis.__lastStatus,
-      debugHtmlSnippet: (globalThis.__lastHtml || "").slice(0, 800),
-      debugHtmlLength: (globalThis.__lastHtml || "").length,
+      debugHtmlLength: h.length,
+      debugOgTitleFound: ogIdx !== -1,
+      debugOgTitleSnippet: ogIdx !== -1 ? h.slice(ogIdx, ogIdx + 200) : null,
+      debugShortDescFound: shortDescIdx !== -1,
+      debugConsentIdx: consentIdx,
+      debugCaptchaIdx: captchaIdx,
+      debugPlayabilityFound: errorPlayabilityIdx !== -1,
+      debugPlayabilitySnippet: errorPlayabilityIdx !== -1 ? h.slice(errorPlayabilityIdx, errorPlayabilityIdx + 300) : null,
+      debugStatusSnippet: statusIdx !== -1 ? h.slice(statusIdx, statusIdx + 100) : null,
     });
     return;
   }
