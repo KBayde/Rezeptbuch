@@ -1484,3 +1484,23 @@ textarea { resize: vertical; font-family: var(--font-body); }
             font-size: 1rem;
      }
 }
+
+
+/* ------------------------------ MHD-Hinweis (Rezepte-Startseite) ------------------------------ */
+
+.expiry-hint {
+     display: flex;
+     align-items: center;
+     justify-content: space-between;
+     gap: 1rem;
+     flex-wrap: wrap;
+     background: var(--color-highlight-tint);
+     border-color: var(--color-highlight);
+     margin-bottom: 1.25rem;
+     font-size: 0.92rem;
+     font-weight: 600;
+     color: #9a6a12;
+}
+.expiry-hint[hidden] {
+     display: none;
+}
