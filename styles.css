@@ -1111,3 +1111,8 @@ textarea { resize: vertical; font-family: var(--font-body); }
 @media (min-width: 721px) and (max-width: 1024px) {
   .recipe-grid { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
 }
+
+
+.inventory-quick-add[hidden] {
+     display: none;
+}
