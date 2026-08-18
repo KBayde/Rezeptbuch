@@ -1178,3 +1178,247 @@ textarea { resize: vertical; font-family: var(--font-body); }
 .detail-actions {
    flex-wrap: wrap;
 }
+
+@media (min-width: 721px) and (max-width: 1024px) {
+   .recipe-grid { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+}
+
+/* ------------------------------ Preise (Einkaufsliste) ------------------------------ */
+
+.price-input-add {
+   width: 130px;
+   flex: 0 0 auto;
+}
+
+.shopping-item-prices {
+   display: flex;
+   align-items: center;
+   gap: 0.4rem;
+   flex-wrap: wrap;
+}
+
+.price-field {
+   display: flex;
+   align-items: center;
+   gap: 0.25rem;
+   background: var(--color-surface-alt);
+   border: 1px solid var(--color-border);
+   border-radius: var(--radius-sm);
+   padding: 0 0.4rem;
+}
+.price-field .price-input {
+   width: 64px;
+   border: none;
+   background: transparent;
+   padding: 0.35rem 0.1rem;
+   font-size: 0.85rem;
+   text-align: right;
+}
+.price-field .price-input:focus {
+   outline: none;
+   box-shadow: none;
+}
+.price-field-suffix {
+   color: var(--color-text-muted);
+   font-size: 0.8rem;
+}
+.price-field--actual {
+   background: var(--color-highlight-tint);
+   border-color: var(--color-highlight);
+}
+
+/* ------------------------------ Kosten-Tracker ------------------------------ */
+
+.cost-summary-card {
+   display: flex;
+   align-items: flex-start;
+   justify-content: space-between;
+   gap: 1rem;
+   flex-wrap: wrap;
+   margin-bottom: 1.25rem;
+}
+
+.cost-summary-total {
+   font-family: var(--font-display);
+   font-size: clamp(1.9rem, 1.6rem + 1.2vw, 2.6rem);
+   font-weight: 600;
+   color: var(--color-primary-dark);
+   margin: 0.15rem 0;
+}
+
+.cost-compare {
+   font-size: 0.9rem;
+   font-weight: 600;
+   margin: 0;
+}
+.cost-compare--up { color: var(--color-danger); }
+.cost-compare--down { color: var(--color-accent-dark); }
+.cost-compare--flat { color: var(--color-text-muted); }
+
+.cost-chart-card {
+   margin-bottom: 1.25rem;
+}
+
+.cost-bar-chart {
+   display: flex;
+   align-items: flex-end;
+   gap: 0.6rem;
+   height: 160px;
+   margin-top: 1rem;
+   overflow-x: auto;
+   padding-bottom: 0.25rem;
+}
+
+.cost-bar {
+   display: flex;
+   flex-direction: column;
+   align-items: center;
+   gap: 0.4rem;
+   flex: 1;
+   min-width: 32px;
+   height: 100%;
+}
+.cost-bar-track {
+   flex: 1;
+   width: 100%;
+   max-width: 34px;
+   display: flex;
+   align-items: flex-end;
+   background: var(--color-surface-alt);
+   border-radius: var(--radius-sm);
+   overflow: hidden;
+}
+.cost-bar-fill {
+   width: 100%;
+   background: linear-gradient(180deg, var(--color-highlight), var(--color-primary));
+   border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+   min-height: 2px;
+   transition: height 0.2s ease;
+}
+.cost-bar-label {
+   font-size: 0.72rem;
+   color: var(--color-text-muted);
+   font-weight: 600;
+}
+
+.cost-grid {
+   display: grid;
+   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+   gap: 1.25rem;
+   margin-bottom: 1.25rem;
+}
+
+.cost-donut-wrap {
+   display: flex;
+   align-items: center;
+   gap: 1.25rem;
+   margin-top: 0.75rem;
+   flex-wrap: wrap;
+}
+
+.cost-donut {
+   width: 110px;
+   height: 110px;
+   border-radius: 50%;
+   flex-shrink: 0;
+   background: var(--color-border);
+}
+
+.cost-category-list {
+   list-style: none;
+   margin: 0;
+   padding: 0;
+   display: flex;
+   flex-direction: column;
+   gap: 0.5rem;
+   flex: 1;
+   min-width: 160px;
+}
+.cost-category-row {
+   display: flex;
+   align-items: center;
+   gap: 0.45rem;
+   font-size: 0.85rem;
+}
+.cost-category-dot {
+   width: 10px;
+   height: 10px;
+   border-radius: 50%;
+   flex-shrink: 0;
+}
+.cost-category-name {
+   flex: 1;
+}
+.cost-category-amount {
+   font-weight: 600;
+   white-space: nowrap;
+}
+
+.cost-budget-bar {
+   height: 10px;
+   border-radius: 999px;
+   background: var(--color-surface-alt);
+   overflow: hidden;
+   margin: 0.6rem 0 0.4rem;
+}
+.cost-budget-fill {
+   height: 100%;
+   background: var(--color-accent);
+   border-radius: 999px;
+   transition: width 0.2s ease;
+}
+.cost-budget-fill--over {
+   background: var(--color-danger);
+}
+
+.cost-recent-list, .cost-history-list {
+   list-style: none;
+   margin: 0.5rem 0 0;
+   padding: 0;
+   display: flex;
+   flex-direction: column;
+   gap: 0.5rem;
+}
+
+.cost-recent-item {
+   display: flex;
+   align-items: center;
+   gap: 0.55rem;
+   font-size: 0.9rem;
+   padding: 0.4rem 0;
+   border-bottom: 1px solid var(--color-border);
+}
+.cost-recent-item:last-child { border-bottom: none; }
+.cost-recent-icon { font-size: 1.05rem; }
+.cost-recent-name { flex: 1; }
+.cost-recent-date { font-size: 0.8rem; }
+.cost-recent-price { font-weight: 600; color: var(--color-primary-dark); }
+
+.cost-history-row {
+   display: flex;
+   align-items: center;
+   gap: 0.75rem;
+   flex-wrap: wrap;
+   font-size: 0.88rem;
+   padding: 0.5rem 0;
+   border-bottom: 1px solid var(--color-border);
+}
+.cost-history-row:last-child { border-bottom: none; }
+.cost-history-label {
+   font-weight: 600;
+   min-width: 130px;
+}
+.cost-history-planned { font-size: 0.82rem; }
+.cost-history-actual {
+   font-weight: 600;
+   color: var(--color-primary-dark);
+   margin-left: auto;
+}
+.cost-diff {
+   font-size: 0.8rem;
+   font-weight: 600;
+   min-width: 90px;
+   text-align: right;
+}
+.cost-diff--over { color: var(--color-danger); }
+.cost-diff--under { color: var(--color-accent-dark); }
