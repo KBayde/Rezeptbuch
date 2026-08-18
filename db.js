@@ -833,3 +833,64 @@ export async function getWeeklyHouseholdCosts(limitWeeks = 26) {
           actualTotal: Number(row.actual_total),
     }));
 }
+
+/* Alle Zutaten-Namen, für die mindestens ein Preis erfasst wurde (alphabetisch, für die Auswahl im Preis-Trend). */
+export async function listPricedIngredientNames() {
+    const { data, error } = await supabase.from("price_history").select("ingredient_name");
+    if (error) throw error;
+    const names = [...new Set((data || []).map((row) => row.ingredient_name))];
+    return names.sort((a, b) => a.localeCompare(b, "de"));
+}
+
+/*
+ * Preisverlauf einer einzelnen Zutat über die Zeit, inkl. Trend-Kennzahlen.
+  * Liefert null, wenn noch keine Preise erfasst wurden, sonst
+   * { ingredientName, points: [{date, price, unit}], average, latest, trend: { direction, percent } }.
+    */
+export async function getPriceTrendForIngredient(ingredientName) {
+    const trimmed = (ingredientName || "").trim();
+    if (!trimmed) return null;
+
+    const { data, error } = await supabase
+      .from("price_history")
+      .select("*")
+      .ilike("ingredient_name", trimmed)
+      .order("recorded_date", { ascending: true })
+      .order("created_at", { ascending: true });
+    if (error) throw error;
+    if (!data || data.length === 0) return null;
+
+    const points = data.map((row) => ({
+          date: row.recorded_date,
+          price: Number(row.price),
+          unit: row.unit,
+    }));
+
+    const average = points.reduce((sum, p) => sum + p.price, 0) / points.length;
+    const latest = points[points.length - 1].price;
+
+    let trend = { direction: "stable", percent: 0 };
+    if (points.length >= 2) {
+          const compareCount = Math.max(1, Math.min(3, Math.floor(points.length / 2)));
+          const earlierSlice = points.slice(0, compareCount);
+          const laterSlice = points.slice(-compareCount);
+          const earlierAvg = earlierSlice.reduce((sum, p) => sum + p.price, 0) / earlierSlice.length;
+          const laterAvg = laterSlice.reduce((sum, p) => sum + p.price, 0) / laterSlice.length;
+          if (earlierAvg > 0) {
+                  const percent = ((laterAvg - earlierAvg) / earlierAvg) * 100;
+                  trend = {
+                            direction: percent > 3 ? "up" : percent < -3 ? "down" : "stable",
+                            percent,
+                  };
+          }
+    }
+
+    return {
+          ingredientName: data[0].ingredient_name,
+          points,
+          average,
+          latest,
+          trend,
+    };
+}
+
