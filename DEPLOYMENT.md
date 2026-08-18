@@ -55,6 +55,28 @@ Es gibt in Phase 1 bewusst **keine öffentliche Registrierung** – Accounts wer
 
 Änderungen später einbauen: Datei in GitHub aktualisieren → Vercel deployt automatisch neu.
 
+## Schritt 6b – Foto-Import einrichten (optional)
+
+Die Funktion "Rezept per Foto erfassen" liest ein Foto (Kochbuchseite, Zeitschrift,
+handschriftliche Notiz) automatisch aus und schlägt Titel, Zutaten und Zubereitungs-
+schritte vor. Dafür wird ein Anthropic-API-Key benötigt (Kosten: wenige Cent pro
+erkanntem Rezept, kein Abo). Ohne diesen Schritt funktioniert der Rest der App
+weiterhin ganz normal – nur der Foto-Import zeigt dann eine Fehlermeldung an.
+
+1. Gehe auf **https://console.anthropic.com** → registrieren bzw. einloggen.
+2. Links im Menü auf **API Keys** → **Create Key**. Name z. B. `rezeptbuch`, dann kopieren
+   (der Key wird nur einmal angezeigt).
+3. Im Vercel-Dashboard: dein `rezeptbuch`-Projekt öffnen → **Settings** → **Environment Variables**.
+4. Neue Variable anlegen:
+   - Name: `ANTHROPIC_API_KEY`
+   - Value: der eben kopierte Key
+   - Environment: Production (und optional Preview/Development)
+5. **Save** klicken, danach im Tab **Deployments** beim neuesten Deployment auf die drei
+   Punkte → **Redeploy**, damit die neue Umgebungsvariable aktiv wird.
+
+Der Key wird ausschließlich serverseitig verwendet (in `api/extract-recipe.js`) und ist
+im Browser nie sichtbar.
+
 ## Schritt 7 – Auf dem Homescreen installieren
 
 **iPad / iPhone (Safari):**
@@ -77,5 +99,6 @@ Es gibt in Phase 1 bewusst **keine öffentliche Registrierung** – Accounts wer
 - **Login schlägt fehl:** Prüfen, ob in Schritt 4 "Auto Confirm User" gesetzt war.
 - **Leere Seite / Fehler in der Konsole:** meist ein Tippfehler in `js/config.js` (URL oder Key). Browser-Konsole öffnen (iPad: über Mac + Safari-Entwicklertools, oder am Desktop testen) und Fehlermeldung prüfen.
 - **"row-level security policy" Fehler beim Speichern:** Das bedeutet, du bist nicht eingeloggt oder die Session ist abgelaufen – neu einloggen.
+- **Foto-Import meldet "ANTHROPIC_API_KEY ist nicht konfiguriert":** Schritt 6b nachholen und danach ein Redeploy in Vercel auslösen (Umgebungsvariablen werden erst beim nächsten Deploy aktiv).
 
 Bei Bedarf kannst du mir jederzeit die Fehlermeldung schicken, dann schauen wir gemeinsam drauf.

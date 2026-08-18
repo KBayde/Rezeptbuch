@@ -1,7 +1,7 @@
 // Sehr einfacher Service Worker: cached nur die App-Hülle (HTML/CSS/JS),
 // damit die App auch bei wackligem Netz schnell startet. Rezeptdaten selbst
 // kommen immer live von Supabase (kein Offline-Datenzugriff in Phase 1).
-const CACHE_NAME = "cookcook-shell-v5";
+const CACHE_NAME = "cookcook-shell-v6";
 const SHELL_FILES = [
   "./",
   "./index.html",
@@ -18,6 +18,7 @@ const SHELL_FILES = [
   "./recipeDetail.js",
   "./mealPlan.js",
   "./shoppingList.js",
+  "./photoImport.js",
   "./manifest.json",
   "./logo-mascot.png",
 ];
@@ -42,8 +43,10 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
 
   // Nur eigene, statische Dateien cachen. Supabase-Aufrufe (andere Domain)
-  // laufen immer direkt übers Netz.
+  // laufen immer direkt übers Netz. API-Routen (z. B. Foto-Erkennung) sind
+  // dynamisch und dürfen nie aus dem Cache beantwortet werden.
   if (url.origin !== self.location.origin) return;
+  if (url.pathname.startsWith("/api/")) return;
 
   event.respondWith(
     caches.match(event.request).then((cached) => {

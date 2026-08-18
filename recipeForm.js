@@ -10,6 +10,7 @@ import {
 } from "./db.js";
 import { escapeHtml, SOURCE_TYPE_LABELS } from "./utils.js";
 import { navigate } from "./router.js";
+import { consumePhotoDraft } from "./photoImport.js";
 
 export async function renderRecipeForm(container, { id } = {}) {
   const isEdit = Boolean(id);
@@ -30,6 +31,14 @@ export async function renderRecipeForm(container, { id } = {}) {
   } catch (err) {
     container.innerHTML = `<p class="form-error">Formular konnte nicht geladen werden: ${escapeHtml(err.message)}</p>`;
     return;
+  }
+
+  // Kommt man von der Foto-Import-Seite und hat gerade ein Rezept aus einem
+  // Foto erkannt bekommen, übernehmen wir diesen Entwurf hier als Vorbelegung
+  // (nur bei "Neues Rezept", nie beim Bearbeiten eines bestehenden).
+  if (!isEdit) {
+    const draft = consumePhotoDraft();
+    if (draft) recipe = draft;
   }
 
   const state = {

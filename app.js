@@ -6,6 +6,7 @@ import { renderRecipeForm } from "./recipeForm.js";
 import { renderRecipeDetail } from "./recipeDetail.js";
 import { renderMealPlan } from "./mealPlan.js";
 import { renderShoppingList } from "./shoppingList.js";
+import { renderPhotoImport } from "./photoImport.js";
 
 let currentSession = null;
 
@@ -41,6 +42,10 @@ function registerRoutes() {
   route("/rezepte/neu", async () => {
     const container = document.getElementById("app");
     await renderRecipeForm(container);
+  });
+  route("/rezepte/foto-import", async () => {
+    const container = document.getElementById("app");
+    await renderPhotoImport(container);
   });
   route("/rezepte/:id/bearbeiten", async (params) => {
     const container = document.getElementById("app");
