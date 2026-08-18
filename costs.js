@@ -3,6 +3,8 @@ import {
     getWeeklyHouseholdCosts,
     getPriceHistoryInRange,
     getRecentPriceHistory,
+      listPricedIngredientNames,
+      getPriceTrendForIngredient,
 } from "./db.js";
 import {
     escapeHtml,
@@ -121,6 +123,14 @@ export async function renderHouseholdCosts(container) {
                                                                                                                                                                                                                                                                                                                               <ul class="cost-history-list" id="cost-history-list"></ul>
                                                                                                                                                                                                                                                                                                                                       <p class="empty-state" id="cost-history-empty" hidden>Noch kein Verlauf vorhanden – wird befüllt, sobald erledigte Einkaufsposten mit Preis entfernt werden.</p>
                                                                                                                                                                                                                                                                                                                                             </div>
+                                                                                                                                                                                                                                                                                                                                            
+                                                                                                                                                                                                                                                                                                                                                  <div class="card">
+                                                                                                                                                                                                                                                                                                                                                          <h2>Preis-Trend pro Zutat</h2>
+                                                                                                                                                                                                                                                                                                                                                                  <select id="trend-select" class="select">
+                                                                                                                                                                                                                                                                                                                                                                            <option value="">Zutat auswählen…</option>
+                                                                                                                                                                                                                                                                                                                                                                                    </select>
+                                                                                                                                                                                                                                                                                                                                                                                            <div id="trend-body" class="trend-body"></div>
+                                                                                                                                                                                                                                                                                                                                                                                                  </div>
                                                                                                                                                                                                                                                                                                                                                 `;
   }
 
@@ -423,6 +433,82 @@ export async function renderHouseholdCosts(container) {
                 historyEmptyEl.hidden = true;
         }
   }
+
+        const trendSelect = content.querySelector("#trend-select");
+        const trendBody = content.querySelector("#trend-body");
+
+        let ingredientNames = [];
+        try {
+                  ingredientNames = await listPricedIngredientNames();
+        } catch {
+                  ingredientNames = [];
+        }
+        trendSelect.innerHTML =
+                  `<option value="">Zutat auswählen…</option>` +
+                  ingredientNames.map((n) => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join("");
+
+        if (ingredientNames.length === 0) {
+                  trendBody.innerHTML = `<p class="empty-state">Noch keine Preise erfasst – sobald Einkaufsposten mit Preis abgehakt werden, erscheinen hier Trends.</p>`;
+        } else {
+                  trendBody.innerHTML = `<p class="text-muted">Wähle eine Zutat, um den Preisverlauf zu sehen.</p>`;
+        }
+
+        trendSelect.addEventListener("change", () => renderTrend(trendSelect.value));
+
+        async function renderTrend(name) {
+                  if (!name) {
+                              trendBody.innerHTML = `<p class="text-muted">Wähle eine Zutat, um den Preisverlauf zu sehen.</p>`;
+                              return;
+                  }
+                  trendBody.innerHTML = `<p class="text-muted">Lade Preisverlauf…</p>`;
+                  try {
+                              const trend = await getPriceTrendForIngredient(name);
+                              if (!trend || trend.points.length === 0) {
+                                            trendBody.innerHTML = `<p class="empty-state">Noch keine Preisdaten für diese Zutat.</p>`;
+                                            return;
+                              }
+                              trendBody.innerHTML = trendChartHtml(trend);
+                  } catch (err) {
+                              trendBody.innerHTML = `<p class="form-error">Preisverlauf konnte nicht geladen werden: ${escapeHtml(err.message)}</p>`;
+                  }
+        }
+
+        function trendChartHtml(trend) {
+                  const max = Math.max(...trend.points.map((p) => p.price), 0.01);
+                  const bars = trend.points
+                    .map((p) => {
+                                  const dateLabel = formatDateDisplay(new Date(`${p.date}T00:00:00`));
+                                  return `
+                                              <div class="cost-bar" title="${escapeHtml(dateLabel)}: ${formatPrice(p.price)} €">
+                                                            <div class="cost-bar-track">
+                                                                            <div class="cost-bar-fill" style="height:${Math.max(4, Math.round((p.price / max) * 100))}%"></div>
+                                                                                          </div>
+                                                                                                        <span class="cost-bar-label">${escapeHtml(dateLabel.slice(0, 5))}</span>
+                                                                                                                    </div>
+                                                                                                                              `;
+                    })
+                    .join("");
+                  const arrow = trend.trend.direction === "up" ? "↑" : trend.trend.direction === "down" ? "↓" : "→";
+                  const trendClass =
+                              trend.trend.direction === "up"
+                      ? "cost-compare--up"
+                                : trend.trend.direction === "down"
+                      ? "cost-compare--down"
+                                : "cost-compare--flat";
+                  const percentLabel =
+                              Math.round(trend.trend.percent) === 0
+                      ? "stabil"
+                                : `${trend.trend.percent > 0 ? "+" : ""}${Math.round(trend.trend.percent)}%`;
+                  return `
+                          <div class="trend-summary">
+                                    <span class="trend-latest">${formatPrice(trend.latest)} €</span>
+                                              <span class="text-muted">Ø ${formatPrice(trend.average)} € · ${trend.points.length} Preis${trend.points.length === 1 ? "" : "e"}</span>
+                                                        <span class="${trendClass}">${arrow} ${percentLabel}</span>
+                                                                </div>
+                                                                        <div class="cost-bar-chart trend-bar-chart">${bars}</div>
+                                                                              `;
+        }
+}
 
   await load();
 }
