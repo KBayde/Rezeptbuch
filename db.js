@@ -341,27 +341,29 @@ export async function deleteRecipe(id) {
 // --------------------------- Wochenplan ---------------------------
 
 const MEAL_PLAN_SELECT = `
-  id, planned_date, servings, meal_type, created_at,
+  id, planned_date, servings, meal_type, created_at, custom_title, custom_price,
   recipes ( id, title, servings_base, prep_time_minutes,
     recipe_images ( storage_path, image_type )
   )
 `;
 
 function normalizeMealPlanEntry(row) {
-  const cover = (row.recipes?.recipe_images || []).find((img) => img.image_type === "cover");
-  return {
-    id: row.id,
-    date: row.planned_date,
-    servings: Number(row.servings),
-    mealType: row.meal_type,
-    recipeId: row.recipes?.id ?? null,
-    recipeTitle: row.recipes?.title ?? "(gelöschtes Rezept)",
-    recipeServingsBase: row.recipes ? Number(row.recipes.servings_base) : null,
-    prepTimeMinutes: row.recipes?.prep_time_minutes ?? null,
-    imageUrl: cover ? getRecipeImageUrl(cover.storage_path) : null,
-  };
+    const cover = (row.recipes?.recipe_images || []).find((img) => img.image_type === "cover");
+    const hasRecipe = !!row.recipes;
+    return {
+          id: row.id,
+          date: row.planned_date,
+          servings: Number(row.servings),
+          mealType: row.meal_type,
+          recipeId: row.recipes?.id ?? null,
+          recipeTitle: hasRecipe ? row.recipes.title : row.custom_title || "(gelöschtes Rezept)",
+          recipeServingsBase: row.recipes ? Number(row.recipes.servings_base) : null,
+          prepTimeMinutes: row.recipes?.prep_time_minutes ?? null,
+          imageUrl: cover ? getRecipeImageUrl(cover.storage_path) : null,
+          isCustom: !hasRecipe && !!row.custom_title,
+          customPrice: row.custom_price === null || row.custom_price === undefined ? null : Number(row.custom_price),
+    };
 }
-
 /** Lädt alle geplanten Mahlzeiten im Datumsbereich [startDate, endDate] (je "YYYY-MM-DD"). */
 export async function listMealPlanEntries(startDate, endDate) {
   const { data, error } = await supabase
@@ -415,6 +417,24 @@ export async function removeMealPlanEntry(id) {
   if (error) throw error;
 }
 
+// Legt einen Wochenplan-Eintrag ohne Rezept an (z. B. "Doener"), optional mit Kosten.
+export async function addCustomMealPlanEntry(date, mealType, title, price = null) {
+    const { data, error } = await supabase
+      .from("meal_plan_entries")
+      .insert({
+              planned_date: date,
+              recipe_id: null,
+              servings: 1,
+              meal_type: mealType,
+              custom_title: title,
+              custom_price: price,
+      })
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+}
+
 /**
  * Kopiert alle geplanten Mahlzeiten einer Woche in eine andere Zielwoche.
   * Praktisch, wenn man denselben Plan (z. B. "Meal-Prep-Woche") wiederholen
@@ -425,7 +445,7 @@ export async function removeMealPlanEntry(id) {
 export async function copyMealPlanWeek(sourceStartDate, sourceEndDate, targetStartDate) {
     const { data: sourceRows, error: fetchError } = await supabase
       .from("meal_plan_entries")
-      .select("planned_date, recipe_id, servings, meal_type")
+      .select("planned_date, recipe_id, servings, meal_type, custom_title, custom_price")
       .gte("planned_date", sourceStartDate)
       .lte("planned_date", sourceEndDate);
     if (fetchError) throw fetchError;
@@ -445,6 +465,8 @@ export async function copyMealPlanWeek(sourceStartDate, sourceEndDate, targetSta
                   recipe_id: row.recipe_id,
                   servings: row.servings,
                   meal_type: row.meal_type,
+                  custom_title: row.custom_title,
+                  custom_price: row.custom_price,
           };
     });
   
@@ -869,6 +891,25 @@ export async function getWeeklyHouseholdCosts(limitWeeks = 26) {
           weekStart: row.week_start,
           plannedTotal: Number(row.planned_total),
           actualTotal: Number(row.actual_total),
+    }));
+}
+
+// Wochenplan-Eintraege ohne Rezept ("Anderes") mit hinterlegten Kosten im Datumsbereich - fuer den Kosten-Tracker.
+export async function getCustomMealCostsInRange(startDate, endDate) {
+    const { data, error } = await supabase
+      .from("meal_plan_entries")
+      .select("id, planned_date, custom_title, custom_price")
+      .is("recipe_id", null)
+      .not("custom_price", "is", null)
+      .gte("planned_date", startDate)
+      .lte("planned_date", endDate)
+      .order("planned_date", { ascending: false });
+    if (error) throw error;
+    return (data || []).map((row) => ({
+          id: row.id,
+          date: row.planned_date,
+          title: row.custom_title || "Anderes",
+          price: Number(row.custom_price),
     }));
 }
 
