@@ -1618,3 +1618,23 @@ textarea { resize: vertical; font-family: var(--font-body); }
      font-weight: 600;
      margin: 0;
 }
+
+.week-copy-row {
+     display: flex;
+     align-items: center;
+     gap: 0.6rem;
+     margin-top: 0.75rem;
+     padding: 0.75rem;
+     background: var(--color-surface-alt);
+     border-radius: var(--radius-md);
+     flex-wrap: wrap;
+}
+.week-copy-row[hidden] {
+     display: none;
+}
+.week-copy-row #week-copy-target {
+     width: 160px;
+}
+.week-copy-row #week-copy-status {
+     flex-basis: 100%;
+}
