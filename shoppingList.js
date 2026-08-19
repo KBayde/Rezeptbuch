@@ -10,6 +10,24 @@ import {
 } from "./db.js";
 import { escapeHtml, formatQuantity, formatPrice, categorizeIngredient, CATEGORY_ORDER, unitOptionsHtml } from "./utils.js";
 
+// Fragt eine grobe Preis-Schätzung fuer eine Zutat per Anthropic API ab (Fallback,
+// wenn noch keine eigene Preishistorie fuer diese Zutat existiert). Gibt null
+// zurueck statt zu werfen, damit ein Fehlschlag die Eingabe nicht blockiert.
+async function estimatePriceViaAI(ingredientName, quantity = null, unit = "") {
+        try {
+                    const res = await fetch("/api/estimate-price", {
+                                    method: "POST",
+                                    headers: { "content-type": "application/json" },
+                                    body: JSON.stringify({ ingredientName, quantity, unit }),
+                    });
+                    if (!res.ok) return null;
+                    const data = await res.json();
+                    return typeof data.price === "number" ? data.price : null;
+        } catch {
+                    return null;
+        }
+}
+
 export async function renderShoppingList(container) {
     container.innerHTML = `
         <div class="page-header">
@@ -60,15 +78,28 @@ export async function renderShoppingList(container) {
 
   let currentItems = [];
 
-  input.addEventListener("blur", async () => {
-        const name = input.value.trim();
-        if (!name || priceInput.value !== "") return;
-        try {
-                const avg = await getAveragePrice(name);
-                priceInput.placeholder = avg !== null ? `Ø ${formatPrice(avg)} €` : "€ geplant";
-        } catch {
-        }
-  });
+input.addEventListener("blur", async () => {
+            const name = input.value.trim();
+            if (!name || priceInput.value !== "") return;
+            try {
+                            const avg = await getAveragePrice(name);
+                            if (avg !== null) {
+                                                priceInput.placeholder = `Ø ${formatPrice(avg)} €`;
+                                                return;
+                            }
+            } catch {
+            }
+            try {
+                            const estimated = await estimatePriceViaAI(name);
+                            if (estimated !== null) {
+                                                priceInput.placeholder = `≈ ${formatPrice(estimated)} € (KI-Schätzung)`;
+                            } else {
+                                                priceInput.placeholder = "€ geplant";
+                            }
+            } catch {
+                            priceInput.placeholder = "€ geplant";
+            }
+});
 
   function itemHtml(item) {
         const cat = categorizeIngredient(item.name);
@@ -115,6 +146,7 @@ export async function renderShoppingList(container) {
                                                                                                                                                                                                                 />
                                                                                                                                                                                                                               <span class="price-field-suffix">€</span>
                                                                                                                                                                                                                                           </label>
+                                                                                                                                                                                                                                          ${item.plannedPrice === null ? `<button type="button" class="btn-ghost btn-tiny price-ai-btn" data-item-id="${item.id}" data-name="${escapeHtml(item.name)}" title="Preis per KI schätzen">🤖</button>` : ""}
                                                                                                                                                                                                                                                       ${actualPriceField}
                                                                                                                                                                                                                                                                 </div>
                                                                                                                                                                                                                                                                           <div class="shopping-item-actions">
@@ -193,6 +225,27 @@ export async function renderShoppingList(container) {
                                       alert("Preis konnte nicht gespeichert werden: " + err.message);
                           }
                 });
+            list.querySelectorAll(".price-ai-btn").forEach((btn) => {
+                    btn.addEventListener("click", async () => {
+                                btn.disabled = true;
+                                btn.textContent = "…";
+                                try {
+                                                const price = await estimatePriceViaAI(btn.dataset.name);
+                                                if (price === null) {
+                                                                    alert("Preis konnte nicht geschätzt werden.");
+                                                                    btn.disabled = false;
+                                                                    btn.textContent = "🤖";
+                                                                    return;
+                                                }
+                                                await updateShoppingListItemPrice(btn.dataset.itemId, { plannedPrice: price });
+                                                await load();
+                                } catch (err) {
+                                                alert("Preis konnte nicht geschätzt werden: " + err.message);
+                                                btn.disabled = false;
+                                                btn.textContent = "🤖";
+                                }
+                    });
+            });
         });
         list.querySelectorAll(".price-input--actual").forEach((priceEl) => {
                 priceEl.addEventListener("change", async () => {
