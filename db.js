@@ -11,6 +11,11 @@ import { formatQuantity, getWeekStart, formatDateISO } from "./utils.js";
 // als "Public bucket" angelegt sein, siehe DEPLOYMENT.md).
 const IMAGE_BUCKET = "recipe-images";
 
+const WORKSPACE_STORAGE_KEY = "cookcook-workspace";
+let currentWorkspace = localStorage.getItem(WORKSPACE_STORAGE_KEY) === "sandbox" ? "sandbox" : "real";
+export function getWorkspace() { return currentWorkspace; }
+export function setWorkspace(value) { currentWorkspace = value === "sandbox" ? "sandbox" : "real"; localStorage.setItem(WORKSPACE_STORAGE_KEY, currentWorkspace); }
+
 // --------------------------- Auth ---------------------------
 
 export async function getSession() {
@@ -384,6 +389,7 @@ export async function listMealPlanEntries(startDate, endDate) {
   const { data, error } = await supabase
     .from("meal_plan_entries")
     .select(MEAL_PLAN_SELECT)
+    .eq("workspace", currentWorkspace)
     .gte("planned_date", startDate)
     .lte("planned_date", endDate)
     .order("planned_date");
@@ -394,14 +400,14 @@ export async function listMealPlanEntries(startDate, endDate) {
 export async function addMealPlanEntry(date, recipeId, servings, mealType = "mittag") {
   const { data: meal, error: mealError } = await supabase
     .from("planned_meals")
-    .insert({ planned_date: date, meal_type: mealType })
+    .insert({ planned_date: date, meal_type: mealType, workspace: currentWorkspace })
     .select()
     .single();
   if (mealError) throw mealError;
 
   const { data, error } = await supabase
     .from("meal_plan_entries")
-    .insert({ planned_date: date, recipe_id: recipeId, servings, meal_type: mealType, planned_meal_id: meal.id })
+    .insert({ planned_date: date, recipe_id: recipeId, servings, meal_type: mealType, planned_meal_id: meal.id, workspace: currentWorkspace })
     .select()
     .single();
   if (error) throw error;
@@ -428,14 +434,14 @@ export async function addMealPlanEntryForDays(date, recipeId, servings, mealType
 
     const { data: meal, error: mealError } = await supabase
       .from("planned_meals")
-      .insert({ planned_date: iso, meal_type: mealType })
+      .insert({ planned_date: iso, meal_type: mealType, workspace: currentWorkspace })
       .select()
       .single();
     if (mealError) throw mealError;
 
     const { data: entry, error: entryError } = await supabase
       .from("meal_plan_entries")
-      .insert({ planned_date: iso, recipe_id: recipeId, servings, meal_type: mealType, planned_meal_id: meal.id })
+      .insert({ planned_date: iso, recipe_id: recipeId, servings, meal_type: mealType, planned_meal_id: meal.id, workspace: currentWorkspace })
       .select()
       .single();
     if (entryError) throw entryError;
@@ -482,7 +488,7 @@ export async function removeMealPlanEntry(id) {
 export async function addCustomMealPlanEntry(date, mealType, title, price = null) {
     const { data: meal, error: mealError } = await supabase
       .from("planned_meals")
-      .insert({ planned_date: date, meal_type: mealType })
+      .insert({ planned_date: date, meal_type: mealType, workspace: currentWorkspace })
       .select()
       .single();
     if (mealError) throw mealError;
@@ -497,6 +503,7 @@ export async function addCustomMealPlanEntry(date, mealType, title, price = null
               custom_title: title,
               custom_price: price,
               planned_meal_id: meal.id,
+              workspace: currentWorkspace,
       })
       .select()
       .single();
@@ -533,6 +540,7 @@ export async function addComponentToPlannedMeal(plannedMealId, recipeId, serving
       servings,
       planned_meal_id: plannedMealId,
       sort_order: nextSortOrder,
+      workspace: currentWorkspace,
     })
     .select()
     .single();
@@ -566,6 +574,7 @@ export async function listMealCombinations() {
         recipes ( id, title )
       )
     `)
+    .eq("workspace", currentWorkspace)
     .order("title");
   if (error) throw error;
   return data.map((row) => ({
@@ -597,7 +606,7 @@ export async function saveMealAsCombination(plannedMealId, title) {
 
   const { data: combo, error: comboError } = await supabase
     .from("meal_combinations")
-    .insert({ title })
+    .insert({ title, workspace: currentWorkspace })
     .select()
     .single();
   if (comboError) throw comboError;
@@ -631,7 +640,7 @@ export async function applyCombinationToSlot(date, mealType, combinationId) {
 
   const { data: meal, error: mealError } = await supabase
     .from("planned_meals")
-    .insert({ planned_date: date, meal_type: mealType, title: combo.title, combination_id: combo.id })
+    .insert({ planned_date: date, meal_type: mealType, title: combo.title, combination_id: combo.id, workspace: currentWorkspace })
     .select()
     .single();
   if (mealError) throw mealError;
@@ -644,6 +653,7 @@ export async function applyCombinationToSlot(date, mealType, combinationId) {
     servings: it.default_servings,
     planned_meal_id: meal.id,
     sort_order: i,
+    workspace: currentWorkspace,
   }));
   const { error: insertError } = await supabase.from("meal_plan_entries").insert(entryRows);
   if (insertError) throw insertError;
@@ -671,6 +681,7 @@ export async function copyMealPlanWeek(sourceStartDate, sourceEndDate, targetSta
     const { data: sourceRows, error: fetchError } = await supabase
       .from("meal_plan_entries")
       .select("planned_date, recipe_id, servings, meal_type, custom_title, custom_price, planned_meal_id, sort_order")
+      .eq("workspace", currentWorkspace)
       .gte("planned_date", sourceStartDate)
       .lte("planned_date", sourceEndDate);
     if (fetchError) throw fetchError;
@@ -715,7 +726,7 @@ export async function copyMealPlanWeek(sourceStartDate, sourceEndDate, targetSta
 
           const { data: newMeal, error: mealInsertError } = await supabase
             .from("planned_meals")
-            .insert({ planned_date: targetDate, meal_type: first.meal_type, title })
+            .insert({ planned_date: targetDate, meal_type: first.meal_type, title, workspace: currentWorkspace })
             .select()
             .single();
           if (mealInsertError) throw mealInsertError;
@@ -729,6 +740,7 @@ export async function copyMealPlanWeek(sourceStartDate, sourceEndDate, targetSta
                   custom_price: row.custom_price,
                   planned_meal_id: newMeal.id,
                   sort_order: row.sort_order ?? i,
+                  workspace: currentWorkspace,
           }));
           const { error: insertError } = await supabase.from("meal_plan_entries").insert(entryRows);
           if (insertError) throw insertError;
@@ -744,6 +756,7 @@ export async function listShoppingListItems() {
   const { data, error } = await supabase
 .from("shopping_list_items")
     .select("*")
+    .eq("workspace", currentWorkspace)
     .order("checked")
     .order("sort_order");
   if (error) throw error;
@@ -762,7 +775,7 @@ return data.map((row) => ({
 export async function addShoppingListItem(name, plannedPrice = null) {
     const { error } = await supabase
       .from("shopping_list_items")
-      .insert({ name, source: "manual", sort_order: 999, planned_price: plannedPrice });
+      .insert({ name, source: "manual", sort_order: 999, planned_price: plannedPrice, workspace: currentWorkspace });
     if (error) throw error;
 }
 
@@ -775,7 +788,7 @@ export async function toggleShoppingListItem(id, checked) {
 export async function addPurchasedShoppingListItem(name, actualPrice) {
   const { data, error } = await supabase
   .from("shopping_list_items")
-  .insert({ name, source: "receipt", sort_order: 999, checked: true, actual_price: actualPrice })
+  .insert({ name, source: "receipt", sort_order: 999, checked: true, actual_price: actualPrice, workspace: currentWorkspace })
   .select()
   .single();
   if (error) throw error;
@@ -808,14 +821,15 @@ export async function clearCheckedShoppingListItems() {
     const { data: checkedItems, error: fetchError } = await supabase
       .from("shopping_list_items")
       .select("name, unit, planned_price, actual_price")
-      .eq("checked", true);
+      .eq("checked", true)
+      .eq("workspace", currentWorkspace);
     if (fetchError) throw fetchError;
 
     if (checkedItems && checkedItems.length > 0) {
           await recordPurchaseHistory(checkedItems);
     }
 
-    const { error } = await supabase.from("shopping_list_items").delete().eq("checked", true);
+    const { error } = await supabase.from("shopping_list_items").delete().eq("checked", true).eq("workspace", currentWorkspace);
     if (error) throw error;
 }
 
@@ -870,7 +884,7 @@ export async function generateShoppingList(startDate, endDate) {
   const entries = await listMealPlanEntries(startDate, endDate);
 
   if (entries.length === 0) {
-    const { error } = await supabase.from("shopping_list_items").delete().eq("source", "plan");
+    const { error } = await supabase.from("shopping_list_items").delete().eq("source", "plan").eq("workspace", currentWorkspace);
     if (error) throw error;
     return 0;
   }
@@ -971,7 +985,8 @@ export async function generateShoppingList(startDate, endDate) {
   const { error: deleteError } = await supabase
     .from("shopping_list_items")
     .delete()
-    .eq("source", "plan");
+    .eq("source", "plan")
+    .eq("workspace", currentWorkspace);
   if (deleteError) throw deleteError;
 
   if (items.length > 0) {
@@ -981,6 +996,7 @@ export async function generateShoppingList(startDate, endDate) {
       unit: it.unit || null,
       source: "plan",
       sort_order: i,
+      workspace: currentWorkspace,
     }));
     const { error: insertError } = await supabase.from("shopping_list_items").insert(rows);
     if (insertError) throw insertError;
@@ -1011,6 +1027,7 @@ export async function listInventoryItems() {
   const { data, error } = await supabase
     .from("inventory_items")
     .select("*")
+    .eq("workspace", currentWorkspace)
     .order("expiry_date", { ascending: true, nullsFirst: false })
     .order("name");
   if (error) throw error;
@@ -1025,6 +1042,7 @@ export async function getExpiringInventoryItems(days = 3) {
     const { data, error } = await supabase
           .from("inventory_items")
           .select("*")
+          .eq("workspace", currentWorkspace)
           .not("expiry_date", "is", null)
           .lte("expiry_date", limitIso)
           .order("expiry_date", { ascending: true });
@@ -1039,6 +1057,7 @@ export async function addInventoryItem(item) {
     unit: item.unit || null,
     expiry_date: item.expiryDate || null,
     source: item.source || "manual",
+    workspace: currentWorkspace,
   });
   if (error) throw error;
 }
@@ -1078,6 +1097,7 @@ async function recordPurchaseHistory(items) {
                             price: actual,
                             unit: item.unit || null,
                             recorded_date: todayIso,
+                            workspace: currentWorkspace,
                   });
           }
     }
@@ -1092,6 +1112,7 @@ async function recordPurchaseHistory(items) {
             .from("weekly_household_costs")
             .select("*")
             .eq("week_start", weekStartIso)
+            .eq("workspace", currentWorkspace)
             .maybeSingle();
           if (findError) throw findError;
 
@@ -1103,13 +1124,15 @@ async function recordPurchaseHistory(items) {
                                 actual_total: Number(existing.actual_total) + actualSum,
                                 updated_at: new Date().toISOString(),
                     })
-                    .eq("week_start", weekStartIso);
+                    .eq("week_start", weekStartIso)
+                    .eq("workspace", currentWorkspace);
                   if (updError) throw updError;
           } else {
                   const { error: insError } = await supabase.from("weekly_household_costs").insert({
                             week_start: weekStartIso,
                             planned_total: plannedSum,
                             actual_total: actualSum,
+                            workspace: currentWorkspace,
                   });
                   if (insError) throw insError;
           }
@@ -1119,7 +1142,7 @@ async function recordPurchaseHistory(items) {
 export async function getAveragePrice(ingredientName) {
     const trimmed = (ingredientName || "").trim();
     if (!trimmed) return null;
-    const { data, error } = await supabase.from("price_history").select("price").ilike("ingredient_name", trimmed);
+    const { data, error } = await supabase.from("price_history").select("price").eq("workspace", currentWorkspace).ilike("ingredient_name", trimmed);
     if (error) throw error;
     if (!data || data.length === 0) return null;
     const sum = data.reduce((acc, row) => acc + Number(row.price), 0);
@@ -1130,6 +1153,7 @@ export async function getPriceHistoryInRange(startDate, endDate) {
     const { data, error } = await supabase
       .from("price_history")
       .select("*")
+      .eq("workspace", currentWorkspace)
       .gte("recorded_date", startDate)
       .lte("recorded_date", endDate)
       .order("recorded_date", { ascending: false })
@@ -1148,6 +1172,7 @@ export async function getRecentPriceHistory(limit = 8) {
     const { data, error } = await supabase
       .from("price_history")
       .select("*")
+      .eq("workspace", currentWorkspace)
       .order("recorded_date", { ascending: false })
       .order("created_at", { ascending: false })
       .limit(limit);
@@ -1165,6 +1190,7 @@ export async function getWeeklyHouseholdCosts(limitWeeks = 26) {
     const { data, error } = await supabase
       .from("weekly_household_costs")
       .select("*")
+      .eq("workspace", currentWorkspace)
       .order("week_start", { ascending: false })
       .limit(limitWeeks);
     if (error) throw error;
@@ -1180,6 +1206,7 @@ export async function getCustomMealCostsInRange(startDate, endDate) {
     const { data, error } = await supabase
       .from("meal_plan_entries")
       .select("id, planned_date, custom_title, custom_price")
+      .eq("workspace", currentWorkspace)
       .is("recipe_id", null)
       .not("custom_price", "is", null)
       .gte("planned_date", startDate)
@@ -1196,7 +1223,7 @@ export async function getCustomMealCostsInRange(startDate, endDate) {
 
 /* Alle Zutaten-Namen, für die mindestens ein Preis erfasst wurde (alphabetisch, für die Auswahl im Preis-Trend). */
 export async function listPricedIngredientNames() {
-    const { data, error } = await supabase.from("price_history").select("ingredient_name");
+    const { data, error } = await supabase.from("price_history").select("ingredient_name").eq("workspace", currentWorkspace);
     if (error) throw error;
     const names = [...new Set((data || []).map((row) => row.ingredient_name))];
     return names.sort((a, b) => a.localeCompare(b, "de"));
@@ -1214,6 +1241,7 @@ export async function getPriceTrendForIngredient(ingredientName) {
     const { data, error } = await supabase
       .from("price_history")
       .select("*")
+      .eq("workspace", currentWorkspace)
       .ilike("ingredient_name", trimmed)
       .order("recorded_date", { ascending: true })
       .order("created_at", { ascending: true });
