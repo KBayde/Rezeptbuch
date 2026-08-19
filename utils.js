@@ -150,6 +150,26 @@ export function formatPrice(value) {
     return Number(value).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+// --------------------------- Einheiten (Vorrat / Einkaufsliste) ---------------------------
+
+/** Gängige Mengeneinheiten für Vorrat & Einkaufsliste (Auswahl deckt die häufigsten Fälle ab). */
+export const UNIT_OPTIONS = [
+    "Stück", "g", "kg", "ml", "l", "Packung", "Bund", "Dose", "Glas", "Flasche", "EL", "TL", "Prise", "Portion",
+  ];
+
+/**
+ * Baut <option>-Markup für eine Einheiten-Auswahl. Ein bereits gesetzter Wert,
+  * der nicht in UNIT_OPTIONS steckt (z. B. Altdaten), wird mit aufgenommen,
+   * damit beim Speichern nichts verloren geht.
+    */
+export function unitOptionsHtml(selected) {
+    const options =
+          !selected || UNIT_OPTIONS.includes(selected) ? UNIT_OPTIONS : [selected, ...UNIT_OPTIONS];
+    return options
+      .map((u) => `<option value="${escapeHtml(u)}"${u === selected ? " selected" : ""}>${escapeHtml(u)}</option>`)
+      .join("");
+}
+
 // --------------------------- Zutaten-Kategorien (Einkaufsliste) ---------------------------
 
 // Stichwort-basierte, bewusst grobe Zuordnung (keine Lebensmitteldatenbank
