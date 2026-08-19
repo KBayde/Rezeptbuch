@@ -1638,3 +1638,11 @@ textarea { resize: vertical; font-family: var(--font-body); }
 .week-copy-row #week-copy-status {
      flex-basis: 100%;
 }
+.meal-entry--custom {
+     background: var(--color-highlight-tint);
+}
+.meal-entry-price {
+     font-size: 0.72rem;
+     font-weight: 700;
+     color: var(--color-primary-dark);
+}
