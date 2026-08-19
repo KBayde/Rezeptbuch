@@ -1,4 +1,4 @@
-import { getSession, onAuthStateChange, signOut } from "./db.js";
+import { getSession, onAuthStateChange, signOut, getWorkspace, setWorkspace } from "./db.js";
 import { route, startRouter, navigate } from "./router.js";
 import { renderLogin } from "./login.js";
 import { renderRecipeList } from "./recipeList.js";
@@ -27,6 +27,7 @@ function renderShell() {
           <a href="#/vorrat">Vorrat</a>
           <a href="#/haushaltskosten">Kosten</a>
         </nav>
+        <div class="workspace-switch" id="workspace-switch"><button type="button" data-workspace="real" class="workspace-btn">Real</button><button type="button" data-workspace="sandbox" class="workspace-btn">Sandbox</button></div>
         <button id="logout-btn" class="btn btn-ghost btn-small">Abmelden</button>
       </header>
       <main id="app" class="app-main"></main>
@@ -35,6 +36,23 @@ function renderShell() {
   document.getElementById("logout-btn").addEventListener("click", async () => {
     await signOut();
   });
+  const workspaceSwitch = document.getElementById("workspace-switch");
+  if (workspaceSwitch) {
+    const updateWorkspaceUI = () => {
+      const current = getWorkspace();
+      workspaceSwitch.querySelectorAll(".workspace-btn").forEach((btn) => {
+        btn.classList.toggle("active", btn.dataset.workspace === current);
+      });
+      document.body.classList.toggle("sandbox-mode", current === "sandbox");
+    };
+    updateWorkspaceUI();
+    workspaceSwitch.querySelectorAll(".workspace-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        setWorkspace(btn.dataset.workspace);
+        location.reload();
+      });
+    });
+  }
 }
 
 function renderAuthOnly() {
