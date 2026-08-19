@@ -3,6 +3,7 @@ import {
       getWeeklyHouseholdCosts,
       getPriceHistoryInRange,
       getRecentPriceHistory,
+      getCustomMealCostsInRange,
       listPricedIngredientNames,
       getPriceTrendForIngredient,
 } from "./db.js";
@@ -230,15 +231,16 @@ export async function renderHouseholdCosts(container) {
           const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
           const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0);
 
-        let liveItems, weeklyCosts, periodEntries, recentEntries;
+        let liveItems, weeklyCosts, periodEntries, recentEntries, customMealCosts;
           try {
                     const rangeStart = period === "week" ? weekStart : monthStart;
                     const rangeEnd = period === "week" ? weekEnd : monthEnd;
-                    [liveItems, weeklyCosts, periodEntries, recentEntries] = await Promise.all([
+                    [liveItems, weeklyCosts, periodEntries, recentEntries, customMealCosts] = await Promise.all([
                                 listShoppingListItems(),
                                 getWeeklyHouseholdCosts(26),
                                 getPriceHistoryInRange(formatDateISO(rangeStart), formatDateISO(rangeEnd)),
                                 getRecentPriceHistory(8),
+                          getCustomMealCostsInRange(formatDateISO(rangeStart), formatDateISO(rangeEnd)),
                               ]);
           } catch (err) {
                     content.innerHTML = `<p class="form-error">Kostenübersicht konnte nicht geladen werden: ${escapeHtml(
@@ -255,14 +257,16 @@ export async function renderHouseholdCosts(container) {
             .map((i) => ({ ingredientName: i.name, price: i.actualPrice, recordedDate: todayIso }));
           const livePlannedSum = liveItems.reduce((s, i) => s + (i.plannedPrice || 0), 0);
           const liveActualSum = liveActualEntries.reduce((s, e) => s + e.price, 0);
-          const combinedEntries = [...periodEntries, ...liveActualEntries];
+          const customMealEntries = customMealCosts.map((c) => ({ ingredientName: c.title, price: c.price, recordedDate: c.date }));
+        const customMealCostsSum = customMealEntries.reduce((s, e) => s + e.price, 0);
+        const combinedEntries = [...periodEntries, ...liveActualEntries, ...customMealEntries];
 
         const committedThisWeek = weeklyCosts.find((w) => w.weekStart === weekStartIso);
           let totalPlanned, totalActual, prevActual, prevLabel;
 
         if (period === "week") {
                   totalPlanned = (committedThisWeek?.plannedTotal || 0) + livePlannedSum;
-                  totalActual = (committedThisWeek?.actualTotal || 0) + liveActualSum;
+                  totalActual = (committedThisWeek?.actualTotal || 0) + liveActualSum + customMealCostsSum;
                   const prevWeekIso = formatDateISO(addDays(weekStart, -7));
                   const prevWeek = weeklyCosts.find((w) => w.weekStart === prevWeekIso);
                   prevActual = prevWeek?.actualTotal || 0;
@@ -273,7 +277,7 @@ export async function renderHouseholdCosts(container) {
                               return d.getFullYear() === today.getFullYear() && d.getMonth() === today.getMonth();
                   });
                   totalPlanned = weeksInMonth.reduce((s, w) => s + w.plannedTotal, 0) + livePlannedSum;
-                  totalActual = weeksInMonth.reduce((s, w) => s + w.actualTotal, 0) + liveActualSum;
+                  totalActual = weeksInMonth.reduce((s, w) => s + w.actualTotal, 0) + liveActualSum + customMealCostsSum;
                   const prevMonthDate = new Date(today.getFullYear(), today.getMonth() - 1, 1);
                   const weeksInPrevMonth = weeklyCosts.filter((w) => {
                               const d = new Date(`${w.weekStart}T00:00:00`);
@@ -421,7 +425,7 @@ export async function renderHouseholdCosts(container) {
         // ---- Letzte Ausgaben ----
         const recentListEl = content.querySelector("#cost-recent-list");
           const recentEmptyEl = content.querySelector("#cost-recent-empty");
-          const mergedRecent = [...liveActualEntries, ...recentEntries]
+          const mergedRecent = [...liveActualEntries, ...customMealEntries, ...recentEntries]
             .sort((a, b) => b.recordedDate.localeCompare(a.recordedDate))
             .slice(0, 8);
           if (mergedRecent.length === 0) {
