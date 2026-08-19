@@ -8,7 +8,7 @@ import {
     updateShoppingListItemPrice,
     getAveragePrice,
 } from "./db.js";
-import { escapeHtml, formatQuantity, formatPrice, categorizeIngredient, CATEGORY_ORDER } from "./utils.js";
+import { escapeHtml, formatQuantity, formatPrice, categorizeIngredient, CATEGORY_ORDER, unitOptionsHtml } from "./utils.js";
 
 export async function renderShoppingList(container) {
     container.innerHTML = `
@@ -116,7 +116,7 @@ export async function renderShoppingList(container) {
                                                                                                                                                                                                                                                                                                                     </div>
                                                                                                                                                                                                                                                                                                                             <form class="inventory-quick-add" data-item-id="${item.id}" hidden>
                                                                                                                                                                                                                                                                                                                                       <input type="number" step="any" min="0" class="qa-quantity" placeholder="Menge" value="${prefillQty}" />
-                                                                                                                                                                                                                                                                                                                                                <input type="text" class="qa-unit" placeholder="Einheit" value="${escapeHtml(prefillUnit)}" />
+                                                                                                    <select class="qa-unit">${unitOptionsHtml(prefillUnit || "Stück")}</select>
                                                                                                                                                                                                                                                                                                                                                           <input type="date" class="qa-expiry" title="Mindesthaltbarkeitsdatum (optional)" />
                                                                                                                                                                                                                                                                                                                                                                     <button type="submit" class="btn btn-primary btn-small">Übernehmen</button>
                                                                                                                                                                                                                                                                                                                                                                               <button type="button" class="btn btn-ghost btn-small qa-cancel">Abbrechen</button>
@@ -220,7 +220,7 @@ export async function renderShoppingList(container) {
                           if (!sourceItem) return;
 
                                                 const quantityRaw = qaForm.querySelector(".qa-quantity").value;
-                          const unit = qaForm.querySelector(".qa-unit").value.trim();
+                          const unit = qaForm.querySelector(".").value.trim();
                           const expiryDate = qaForm.querySelector(".qa-expiry").value;
                           const submitBtn = qaForm.querySelector("button[type=submit]");
                           submitBtn.disabled = true;
@@ -313,7 +313,7 @@ export async function renderShoppingList(container) {
                           await addInventoryItem({
                                       name: item.name,
                                       quantity: item.quantity,
-                                      unit: item.unit,
+                                      unit: item.unit || "Stück",
                                       expiryDate: null,
                                       source: "shopping_list",
                           });
