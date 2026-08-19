@@ -8,6 +8,11 @@ copyMealPlanWeek,
 addCustomMealPlanEntry,
 generateShoppingList,
 suggestRecipesFromInventory,
+listMealCombinations,
+addComponentToPlannedMeal,
+renamePlannedMeal,
+saveMealAsCombination,
+applyCombinationToSlot,
 } from "./db.js";
 import {
 escapeHtml,
@@ -28,6 +33,7 @@ const today = new Date();
 let currentWeekStart = getWeekStart(today);
 let armTwoDays = false;
 let currentEntries = [];
+let allCombinations = [];
 let viewMode =
 localStorage.getItem(VIEW_STORAGE_KEY) ||
 (window.matchMedia("(max-width: 720px)").matches ? "list" : "grid");
@@ -113,6 +119,12 @@ err.message
 return;
 }
 
+try {
+allCombinations = await listMealCombinations();
+} catch {
+allCombinations = [];
+}
+
 function setArmTwoDays(value) {
 armTwoDays = value;
 twoDayToggle.classList.toggle("chip-toggle--active", value);
@@ -143,6 +155,17 @@ return allRecipes
 .filter((r) => !r.mealTypes || r.mealTypes.length === 0 || r.mealTypes.includes(mealTypeKey))
 .map((r) => `<option value="${r.id}">${escapeHtml(r.title)}</option>`)
 .join("");
+}
+
+// Optgroup mit gespeicherten Essens-Kombinationen ("Unser Raclette" usw.) fuer
+// den Haupt-Rezept-Select jedes Zeitfensters - Ein-Klick-Uebernahme einer
+// ganzen mehrteiligen Essens-Vorlage, ohne die einzelnen Rezepte einzeln zu suchen.
+function comboOptionsHtml() {
+if (!allCombinations || allCombinations.length === 0) return "";
+const opts = allCombinations
+.map((c) => `<option value="combo:${c.id}">🧩 ${escapeHtml(c.title)}</option>`)
+.join("");
+return `<optgroup label="Kombination einfügen">${opts}</optgroup>`;
 }
 
   function entryThumbHtml(entry) {
@@ -182,15 +205,78 @@ ${metaHtml}
 `;
 }
 
+// Gruppiert die flache Eintragsliste eines Zeitfensters nach ihrem
+// gemeinsamen "geplanten Essen" (plannedMealId). Ein einzelnes Rezept bleibt
+// dabei einfach eine Gruppe mit genau einem Eintrag - der einfache Fall sieht
+// optisch weiterhin genauso aus wie zuvor.
+function groupEntriesByMeal(entries) {
+const order = [];
+const byMeal = new Map();
+for (const e of entries) {
+const key = e.plannedMealId || `solo:${e.id}`;
+if (!byMeal.has(key)) {
+byMeal.set(key, { plannedMealId: e.plannedMealId || null, mealTitle: e.mealTitle || null, entries: [] });
+order.push(key);
+}
+byMeal.get(key).entries.push(e);
+}
+return order.map((k) => {
+const g = byMeal.get(k);
+g.entries.sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+return g;
+});
+}
+
+// Rendert eine Essens-Gruppe. Bei genau einer Komponente ohne Titel ist das
+// Ergebnis optisch identisch zum bisherigen Einzel-Chip (kein Rahmen, kein
+// Titel-Header) - erst ab zwei Komponenten oder gesetztem Titel erscheint der
+// Gruppen-Rahmen mit Titel, Umbenennen- und "Als Kombination speichern"-Aktion.
+function mealGroupHtml(group, mealTypeKey, entryRenderer) {
+const isMulti = group.entries.length > 1 || !!group.mealTitle;
+const entriesHtml = group.entries.map(entryRenderer).join("");
+const canExtend = !!group.plannedMealId;
+const hasRecipeComponent = group.entries.some((e) => e.recipeId);
+const headerHtml = isMulti
+? `<div class="meal-group-header">
+<span class="meal-group-title">${escapeHtml(group.mealTitle || "Essen")}</span>
+${
+canExtend
+? `<button class="meal-group-rename" data-planned-meal-id="${group.plannedMealId}" title="Titel ändern" type="button">✎</button>`
+: ""
+}
+${
+canExtend && hasRecipeComponent
+? `<button class="meal-group-save-combo" data-planned-meal-id="${group.plannedMealId}" title="Als Kombination speichern" type="button">💾</button>`
+: ""
+}
+</div>`
+: "";
+const addComponentHtml = canExtend
+? `<select class="component-add-select" data-planned-meal-id="${group.plannedMealId}" data-meal-type="${mealTypeKey}">
+<option value="">+ Komponente…</option>
+${recipeOptionsHtml(mealTypeKey)}
+</select>`
+: "";
+return `
+<div class="meal-group${isMulti ? " meal-group--multi" : ""}" data-planned-meal-id="${group.plannedMealId || ""}">
+${headerHtml}
+<div class="meal-group-entries">${entriesHtml}</div>
+${addComponentHtml}
+</div>
+`;
+}
+
 function cellHtml(iso, mealTypeKey, entries) {
-const entriesHtml = entries.map(entryChipHtml).join("");
+const groups = groupEntriesByMeal(entries);
+const groupsHtml = groups.map((g) => mealGroupHtml(g, mealTypeKey, entryChipHtml)).join("");
 return `
 <div class="timetable-cell" data-date="${iso}" data-meal-type="${mealTypeKey}">
-<div class="meal-entries">${entriesHtml}</div>
+<div class="meal-entries">${groupsHtml}</div>
 <select class="meal-add-select meal-add-select--${mealTypeKey}" data-date="${iso}" data-meal-type="${mealTypeKey}">
 <option value="">+ Rezept…</option>
 <option value="__custom__">✏️ Anderes (ohne Rezept)…</option>
 ${recipeOptionsHtml(mealTypeKey)}
+${comboOptionsHtml()}
 </select>
 </div>
 `;
@@ -264,7 +350,8 @@ ${metaHtml}
 }
 
 function agendaMealRowHtml(iso, mt, entries) {
-const entriesHtml = entries.map(agendaEntryHtml).join("");
+const groups = groupEntriesByMeal(entries);
+const groupsHtml = groups.map((g) => mealGroupHtml(g, mt.key, agendaEntryHtml)).join("");
 return `
 <div class="agenda-meal-row" data-date="${iso}" data-meal-type="${mt.key}">
 <div class="agenda-meal-label">
@@ -272,11 +359,12 @@ return `
 <span class="meal-label">${mt.label}</span>
 </div>
 <div class="agenda-meal-content">
-${entriesHtml || `<p class="agenda-meal-empty text-muted text-small">Nichts geplant</p>`}
+${groupsHtml || `<p class="agenda-meal-empty text-muted text-small">Nichts geplant</p>`}
 <select class="meal-add-select meal-add-select--${mt.key}" data-date="${iso}" data-meal-type="${mt.key}">
 <option value="">+ Rezept…</option>
 <option value="__custom__">✏️ Anderes (ohne Rezept)…</option>
 ${recipeOptionsHtml(mt.key)}
+${comboOptionsHtml()}
 </select>
 </div>
 </div>
@@ -327,11 +415,11 @@ buildTimetable(currentEntries);
   function wireCells() {
 planEl.querySelectorAll(".meal-add-select").forEach((select) => {
 select.addEventListener("change", async () => {
-const recipeId = select.value;
-if (!recipeId) return;
+const value = select.value;
+if (!value) return;
 const date = select.dataset.date;
 const mealType = select.dataset.mealType;
-if (recipeId === "__custom__") {
+if (value === "__custom__") {
 const title = prompt("Was hast du gegessen (ohne Rezept)?");
 if (!title || !title.trim()) {
 select.value = "";
@@ -354,6 +442,20 @@ select.value = "";
 }
 return;
 }
+if (value.startsWith("combo:")) {
+const combinationId = value.slice("combo:".length);
+select.disabled = true;
+try {
+await applyCombinationToSlot(date, mealType, combinationId);
+await load();
+} catch (err) {
+alert("Konnte Kombination nicht einfügen: " + err.message);
+select.disabled = false;
+select.value = "";
+}
+return;
+}
+const recipeId = value;
 const recipe = allRecipes.find((r) => r.id === recipeId);
 const servings = recipe ? Math.max(1, Math.round(recipe.servingsBase)) : 2;
 const dayCount = armTwoDays ? 2 : 1;
@@ -365,6 +467,81 @@ await load();
 } catch (err) {
 alert("Konnte Rezept nicht hinzufügen: " + err.message);
 select.disabled = false;
+}
+});
+});
+
+planEl.querySelectorAll(".component-add-select").forEach((select) => {
+select.addEventListener("change", async () => {
+const recipeId = select.value;
+if (!recipeId) return;
+const plannedMealId = select.dataset.plannedMealId;
+const group = currentEntries.filter((e) => e.plannedMealId === plannedMealId);
+const needsTitle = group.length === 1 && !group[0]?.mealTitle;
+let title = null;
+if (needsTitle) {
+title = prompt(
+"Wie soll dieses Essen heißen (z. B. \"Raclette-Abend\")? Ab zwei Komponenten ist ein Titel Pflicht."
+);
+if (!title || !title.trim()) {
+select.value = "";
+return;
+}
+}
+const recipe = allRecipes.find((r) => r.id === recipeId);
+const servings = recipe ? Math.max(1, Math.round(recipe.servingsBase)) : 2;
+select.disabled = true;
+try {
+await addComponentToPlannedMeal(plannedMealId, recipeId, servings);
+if (title) await renamePlannedMeal(plannedMealId, title.trim());
+await load();
+} catch (err) {
+alert("Konnte Komponente nicht hinzufügen: " + err.message);
+select.disabled = false;
+select.value = "";
+}
+});
+});
+
+planEl.querySelectorAll(".meal-group-rename").forEach((btn) => {
+btn.addEventListener("click", async () => {
+const plannedMealId = btn.dataset.plannedMealId;
+const group = currentEntries.filter((e) => e.plannedMealId === plannedMealId);
+const current = group[0]?.mealTitle || "";
+const title = prompt("Titel für dieses Essen:", current);
+if (title === null) return;
+if (!title.trim()) {
+alert("Ein Titel ist erforderlich, solange dieses Essen mehrere Komponenten hat.");
+return;
+}
+btn.disabled = true;
+try {
+await renamePlannedMeal(plannedMealId, title.trim());
+await load();
+} catch (err) {
+alert("Konnte Titel nicht speichern: " + err.message);
+btn.disabled = false;
+}
+});
+});
+
+planEl.querySelectorAll(".meal-group-save-combo").forEach((btn) => {
+btn.addEventListener("click", async () => {
+const plannedMealId = btn.dataset.plannedMealId;
+const group = currentEntries.filter((e) => e.plannedMealId === plannedMealId);
+const suggested = group[0]?.mealTitle || "";
+const title = prompt("Name für die neue Kombination:", suggested);
+if (!title || !title.trim()) return;
+btn.disabled = true;
+try {
+await saveMealAsCombination(plannedMealId, title.trim());
+allCombinations = await listMealCombinations();
+renderPlan();
+alert(`Kombination "${title.trim()}" gespeichert. Du findest sie ab jetzt in der Rezeptauswahl jedes Zeitfensters.`);
+} catch (err) {
+alert("Konnte Kombination nicht speichern: " + err.message);
+} finally {
+btn.disabled = false;
 }
 });
 });
