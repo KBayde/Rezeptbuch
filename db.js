@@ -415,11 +415,49 @@ export async function removeMealPlanEntry(id) {
   if (error) throw error;
 }
 
+/**
+ * Kopiert alle geplanten Mahlzeiten einer Woche in eine andere Zielwoche.
+  * Praktisch, wenn man denselben Plan (z. B. "Meal-Prep-Woche") wiederholen
+   * moechte, ohne alles erneut einzeln einzutragen. Bestehende Eintraege in der
+    * Zielwoche bleiben erhalten, es wird nur ergaenzt (keine Ueberschreibung).
+     * Gibt die Anzahl der kopierten Eintraege zurueck.
+      */
+export async function copyMealPlanWeek(sourceStartDate, sourceEndDate, targetStartDate) {
+    const { data: sourceRows, error: fetchError } = await supabase
+      .from("meal_plan_entries")
+      .select("planned_date, recipe_id, servings, meal_type")
+      .gte("planned_date", sourceStartDate)
+      .lte("planned_date", sourceEndDate);
+    if (fetchError) throw fetchError;
+    if (!sourceRows || sourceRows.length === 0) return 0;
+  
+    const dayOffsetMs =
+          new Date(`${targetStartDate}T00:00:00`).getTime() - new Date(`${sourceStartDate}T00:00:00`).getTime();
+  
+    const rows = sourceRows.map((row) => {
+          const shifted = new Date(`${row.planned_date}T00:00:00`).getTime() + dayOffsetMs;
+          const d = new Date(shifted);
+          const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+                  d.getDate()
+                ).padStart(2, "0")}`;
+          return {
+                  planned_date: iso,
+                  recipe_id: row.recipe_id,
+                  servings: row.servings,
+                  meal_type: row.meal_type,
+          };
+    });
+  
+    const { error: insertError } = await supabase.from("meal_plan_entries").insert(rows);
+    if (insertError) throw insertError;
+    return rows.length;
+}
+
 // --------------------------- Einkaufsliste ---------------------------
 
 export async function listShoppingListItems() {
   const { data, error } = await supabase
-    .from("shopping_list_items")
+.from("shopping_list_items")
     .select("*")
     .order("checked")
     .order("sort_order");
