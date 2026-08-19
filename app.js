@@ -11,6 +11,7 @@ import { renderYoutubeImport } from "./youtubeImport.js";
 import { renderLinkImport } from "./linkImport.js";
 import { renderInventory } from "./inventory.js";
 import { renderHouseholdCosts } from "./costs.js";
+import { renderReceiptImport } from "./receiptImport.js";
 
 let currentSession = null;
 
@@ -85,6 +86,10 @@ function registerRoutes() {
     const container = document.getElementById("app");
     await renderHouseholdCosts(container);
   });
+    route("/einkaufsliste/kassenbon-scan", async () => {
+          const container = document.getElementById("app");
+          await renderReceiptImport(container);
+    });
 }
 
 let routerStarted = false;
