@@ -771,6 +771,17 @@ export async function toggleShoppingListItem(id, checked) {
   if (error) throw error;
 }
 
+        // Fuegt einen bereits gekauften Posten hinzu (z. B. aus Kassenbon-Scan): direkt abgehakt mit tatsaechlichem Preis.
+export async function addPurchasedShoppingListItem(name, actualPrice) {
+  const { data, error } = await supabase
+  .from("shopping_list_items")
+  .insert({ name, source: "receipt", sort_order: 999, checked: true, actual_price: actualPrice })
+  .select()
+  .single();
+  if (error) throw error;
+  return data;
+}
+
 /** Setzt geplanten und/oder tatsaechlichen Preis eines Postens. changes: Teilmenge aus { plannedPrice, actualPrice }. */
 export async function updateShoppingListItemPrice(id, changes = {}) {
   const payload = {};
