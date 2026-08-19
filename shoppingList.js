@@ -16,7 +16,6 @@ export async function renderShoppingList(container) {
               <div>
                       <h1>Einkaufsliste</h1>
                               <p class="text-muted" id="shopping-count"></p>
-                                      <p class="text-muted" id="shopping-cost-summary" hidden></p>
                                             </div>
                                                   <a href="#/wochenplan" class="btn btn-secondary">← Zum Wochenplan</a>
                                                       </div>
@@ -30,7 +29,15 @@ export async function renderShoppingList(container) {
                                                                                                   <button type="submit" class="btn btn-primary">+ Hinzufügen</button>
                                                                                                       </form>
                                                                                                       
-                                                                                                          <div id="shopping-items" class="shopping-list"></div>
+                                                                                                    <div class="card shopping-summary-card" id="shopping-summary-card">
+                                                                                                              <div>
+                                                                                                                          <p class="text-muted">Geplante Summe</p>
+                                                                                                                                      <p class="shopping-summary-total" id="shopping-summary-total"></p>
+                                                                                                                                                </div>
+                                                                                                                                                          <p class="shopping-summary-actual" id="shopping-summary-actual"></p>
+                                                                                                                                                                  </div>
+                                                                                                                                                                  
+                                                                                                                                                                  <div id="shopping-items" class="shopping-list"></div>
                                                                                                               <p id="shopping-empty" class="empty-state" hidden>Deine Einkaufsliste ist leer.</p>
                                                                                                               
                                                                                                                   <div class="week-footer">
@@ -43,7 +50,8 @@ export async function renderShoppingList(container) {
   const list = container.querySelector("#shopping-items");
     const emptyState = container.querySelector("#shopping-empty");
     const countEl = container.querySelector("#shopping-count");
-    const costSummaryEl = container.querySelector("#shopping-cost-summary");
+    const summaryTotalEl = container.querySelector("#shopping-summary-total");
+        const summaryActualEl = container.querySelector("#shopping-summary-actual");
     const form = container.querySelector("#add-item-form");
     const input = container.querySelector("#add-item-input");
     const priceInput = container.querySelector("#add-item-price");
@@ -242,16 +250,12 @@ export async function renderShoppingList(container) {
         });
   }
 
-  function updateCostSummary(items) {
+    function updateCostSummary(items) {
         const plannedSum = items.reduce((sum, i) => sum + (i.plannedPrice || 0), 0);
-        const actualSum = items.filter((i) => i.checked).reduce((sum, i) => sum + (i.actualPrice || 0), 0);
-        if (plannedSum === 0 && actualSum === 0) {
-                costSummaryEl.hidden = true;
-                return;
-        }
-        costSummaryEl.hidden = false;
-        costSummaryEl.textContent = `Geplant: ${formatPrice(plannedSum)} € · Bereits bezahlt: ${formatPrice(actualSum)} €`;
-  }
+            const actualSum = items.filter((i) => i.checked).reduce((sum, i) => sum + (i.actualPrice || 0), 0);
+            summaryTotalEl.textContent = `${formatPrice(plannedSum)} €`;
+            summaryActualEl.textContent = actualSum > 0 ? `bereits bezahlt: ${formatPrice(actualSum)} €` : "";
+}
 
   async function load() {
         list.innerHTML = `<p class="text-muted">Lade…</p>`;
