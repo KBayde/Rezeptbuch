@@ -1938,3 +1938,83 @@ textarea { resize: vertical; font-family: var(--font-body); }
 .agenda-meal-content .meal-group-title {
    font-size: 0.85rem;
 }
+
+
+/* ------------------------------ Workspace-Umschalter (Real/Sandbox) ------------------------------ */
+
+.workspace-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  background: var(--color-surface-alt);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  padding: 0.2rem;
+}
+
+.workspace-btn {
+  border: none;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-family: var(--font-body);
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.workspace-btn:hover {
+  color: var(--color-text);
+}
+
+.workspace-btn.active[data-workspace="real"] {
+  background: var(--color-primary);
+  color: #fff;
+}
+
+.workspace-btn.active[data-workspace="sandbox"] {
+  background: var(--color-highlight);
+  color: var(--color-primary-dark);
+}
+
+body.sandbox-mode::before {
+  content: "Sandbox-Modus \2013  Testdaten, keine echten Daten";
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 26px;
+  background: repeating-linear-gradient(
+    45deg,
+    var(--color-highlight),
+    var(--color-highlight) 12px,
+    #e8ac3e 12px,
+    #e8ac3e 24px
+  );
+  color: var(--color-primary-dark);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+body.sandbox-mode .app-shell {
+  padding-top: 26px;
+}
+
+body.sandbox-mode .topbar {
+  top: 26px;
+  border-bottom-color: var(--color-highlight);
+}
+
+@media (max-width: 420px) {
+  .workspace-btn {
+    padding: 0.28rem 0.5rem;
+    font-size: 0.72rem;
+  }
+}
