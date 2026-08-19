@@ -60,6 +60,7 @@ export async function renderShoppingList(container) {
                                                                                                               
                                                                                                                   <div class="week-footer">
                                                                                                                         <a href="#/haushaltskosten" class="btn btn-secondary">💶 Kosten-Tracker</a>
+                                                                                                                        <a href="#/einkaufsliste/kassenbon-scan" class="btn btn-secondary">📷 Kassenbon scannen</a>
                                                                                                                               <button id="move-checked-to-inventory-btn" class="btn btn-secondary" type="button">→ Erledigte in Vorrat übernehmen</button>
                                                                                                                                     <button id="clear-checked-btn" class="btn btn-secondary" type="button">Erledigte entfernen</button>
                                                                                                                                         </div>
