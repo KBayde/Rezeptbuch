@@ -1,7 +1,7 @@
 // Sehr einfacher Service Worker: cached nur die App-Huelle (HTML/CSS/JS),
 // damit die App auch bei wackligem Netz schnell startet. Rezeptdaten selbst
 // kommen immer live von Supabase (kein Offline-Datenzugriff in Phase 1).
-const CACHE_NAME = "cookcook-shell-v15";
+const CACHE_NAME = "cookcook-shell-v16";
 const SHELL_FILES = [
   "./",
   "./index.html",
