@@ -1860,3 +1860,81 @@ textarea { resize: vertical; font-family: var(--font-body); }
     font-size: 0.62rem;
   }
 }
+
+/* ------------------------------ Wochenplan: mehrteilige Essen (Kombinationen) ------------------------------ */
+
+.meal-group {
+   display: flex;
+   flex-direction: column;
+   gap: 0.3rem;
+}
+.meal-group--multi {
+   background: var(--color-surface);
+   border: 1px solid var(--color-highlight);
+   border-radius: var(--radius-sm);
+   padding: 0.35rem;
+}
+.meal-group-header {
+   display: flex;
+   align-items: center;
+   gap: 0.3rem;
+}
+.meal-group-title {
+   flex: 1;
+   min-width: 0;
+   font-size: 0.74rem;
+   font-weight: 700;
+   color: var(--color-primary-dark);
+   overflow: hidden;
+   text-overflow: ellipsis;
+   white-space: nowrap;
+}
+.meal-group-rename,
+.meal-group-save-combo {
+   flex-shrink: 0;
+   width: 20px;
+   height: 20px;
+   border-radius: 50%;
+   border: 1px solid var(--color-border);
+   background: var(--color-surface-alt);
+   cursor: pointer;
+   font-size: 0.72rem;
+   line-height: 1;
+   padding: 0;
+}
+.meal-group-rename:hover,
+.meal-group-save-combo:hover {
+   background: var(--color-highlight-tint);
+   border-color: var(--color-highlight);
+}
+.meal-group-entries {
+   display: flex;
+   flex-direction: column;
+   gap: 0.3rem;
+}
+.component-add-select {
+   width: 100%;
+   font-size: 0.7rem;
+   font-weight: 600;
+   padding: 0.25rem 0.4rem;
+   border-radius: var(--radius-sm);
+   border: 1px dashed var(--color-border);
+   background: transparent;
+   color: var(--color-text-muted);
+   cursor: pointer;
+}
+.component-add-select:hover {
+   border-color: var(--color-primary);
+   color: var(--color-primary-dark);
+}
+.component-add-select:focus {
+   outline: none;
+   border-style: solid;
+   border-color: var(--color-primary);
+}
+.agenda-meal-content .meal-group--multi {
+   padding: 0.45rem 0.5rem;
+}
+.agenda-meal-content .meal-group-title {
+   font-size: 0.85rem;
+}
