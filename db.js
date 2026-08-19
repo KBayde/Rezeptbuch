@@ -122,7 +122,7 @@ export function getRecipeImageUrl(storagePath) {
 
 /**
  * Lädt ein Bild hoch und hängt es als recipe_images-Zeile an ein (bereits
- * existierendes) Rezept. imageType: 'cover' | 'source_front' | 'source_back' | 'other'.
+ * existierendes) Rezept. imageType: "cover" | "source_front" | "source_back" | "other".
  */
 export async function addRecipeImage(recipeId, file, imageType = "cover") {
   const storagePath = await uploadImageFile(recipeId, file, imageType);
@@ -339,12 +339,24 @@ export async function deleteRecipe(id) {
 }
 
 // --------------------------- Wochenplan ---------------------------
+//
+// Fachliches Modell: ein Wochenplan-Slot (Datum + Mahlzeit-Typ) enthaelt ein
+// "geplantes Essen" (Tabelle planned_meals). Dieses Essen besteht aus einer
+// oder mehreren Rezept-Komponenten (Tabelle meal_plan_entries, je Zeile eine
+// Komponente, verknuepft ueber planned_meal_id). Ein einzelnes Rezept ist
+// damit einfach der einfachste Fall eines geplanten Essens: EIN planned_meal
+// mit GENAU EINER Komponente. Reusable Vorlagen ("Kombinationen") leben in
+// meal_combinations / meal_combination_items und werden beim Einfuegen als
+// Snapshot kopiert (neue Komponenten-Zeilen, die auf dieselben Rezepte
+// verweisen) - die Rezepte selbst bleiben eigenstaendig und werden nie dupliziert.
 
 const MEAL_PLAN_SELECT = `
   id, planned_date, servings, meal_type, created_at, custom_title, custom_price,
+  planned_meal_id, sort_order,
   recipes ( id, title, servings_base, prep_time_minutes,
     recipe_images ( storage_path, image_type )
-  )
+  ),
+  planned_meals ( id, title, combination_id )
 `;
 
 function normalizeMealPlanEntry(row) {
@@ -362,6 +374,9 @@ function normalizeMealPlanEntry(row) {
           imageUrl: cover ? getRecipeImageUrl(cover.storage_path) : null,
           isCustom: !hasRecipe && !!row.custom_title,
           customPrice: row.custom_price === null || row.custom_price === undefined ? null : Number(row.custom_price),
+          plannedMealId: row.planned_meal_id ?? null,
+          mealTitle: row.planned_meals?.title ?? null,
+          sortOrder: row.sort_order ?? 0,
     };
 }
 /** Lädt alle geplanten Mahlzeiten im Datumsbereich [startDate, endDate] (je "YYYY-MM-DD"). */
@@ -377,9 +392,16 @@ export async function listMealPlanEntries(startDate, endDate) {
 }
 
 export async function addMealPlanEntry(date, recipeId, servings, mealType = "mittag") {
+  const { data: meal, error: mealError } = await supabase
+    .from("planned_meals")
+    .insert({ planned_date: date, meal_type: mealType })
+    .select()
+    .single();
+  if (mealError) throw mealError;
+
   const { data, error } = await supabase
     .from("meal_plan_entries")
-    .insert({ planned_date: date, recipe_id: recipeId, servings, meal_type: mealType })
+    .insert({ planned_date: date, recipe_id: recipeId, servings, meal_type: mealType, planned_meal_id: meal.id })
     .select()
     .single();
   if (error) throw error;
@@ -390,21 +412,36 @@ export async function addMealPlanEntry(date, recipeId, servings, mealType = "mit
  * Plant ein Rezept für eine bestimmte Mahlzeit an einem oder mehreren
  * aufeinanderfolgenden Tagen (z. B. "das gleiche Gericht auch morgen essen").
  * dayCount = 1 legt nur "date" an, dayCount = 2 zusätzlich den Folgetag.
+ * Jeder Tag bekommt sein eigenes neues geplantes Essen (planned_meal) mit
+ * dieser einen Komponente - das ist der einfache Standardfall und bleibt
+ * genauso schnell wie zuvor: Rezept auswählen, Zeitfenster auswählen, fertig.
  */
 export async function addMealPlanEntryForDays(date, recipeId, servings, mealType, dayCount = 1) {
-  const rows = [];
   const start = new Date(date);
+  const inserted = [];
   for (let i = 0; i < dayCount; i++) {
     const d = new Date(start);
     d.setDate(d.getDate() + i);
     const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
       d.getDate()
     ).padStart(2, "0")}`;
-    rows.push({ planned_date: iso, recipe_id: recipeId, servings, meal_type: mealType });
+
+    const { data: meal, error: mealError } = await supabase
+      .from("planned_meals")
+      .insert({ planned_date: iso, meal_type: mealType })
+      .select()
+      .single();
+    if (mealError) throw mealError;
+
+    const { data: entry, error: entryError } = await supabase
+      .from("meal_plan_entries")
+      .insert({ planned_date: iso, recipe_id: recipeId, servings, meal_type: mealType, planned_meal_id: meal.id })
+      .select()
+      .single();
+    if (entryError) throw entryError;
+    inserted.push(entry);
   }
-  const { data, error } = await supabase.from("meal_plan_entries").insert(rows).select();
-  if (error) throw error;
-  return data;
+  return inserted;
 }
 
 export async function updateMealPlanEntryServings(id, servings) {
@@ -412,13 +449,44 @@ export async function updateMealPlanEntryServings(id, servings) {
   if (error) throw error;
 }
 
+/**
+ * Entfernt eine einzelne Rezept-Komponente aus einem geplanten Essen. War es
+ * die letzte verbliebene Komponente dieses Essens, wird das jetzt leere
+ * planned_meal automatisch mit aufgeraeumt (keine Karteileichen im Plan).
+ */
 export async function removeMealPlanEntry(id) {
+  const { data: existing, error: findError } = await supabase
+    .from("meal_plan_entries")
+    .select("planned_meal_id")
+    .eq("id", id)
+    .maybeSingle();
+  if (findError) throw findError;
+
   const { error } = await supabase.from("meal_plan_entries").delete().eq("id", id);
   if (error) throw error;
+
+  const plannedMealId = existing?.planned_meal_id;
+  if (plannedMealId) {
+    const { count, error: countError } = await supabase
+      .from("meal_plan_entries")
+      .select("id", { count: "exact", head: true })
+      .eq("planned_meal_id", plannedMealId);
+    if (countError) throw countError;
+    if (!count) {
+      await supabase.from("planned_meals").delete().eq("id", plannedMealId);
+    }
+  }
 }
 
 // Legt einen Wochenplan-Eintrag ohne Rezept an (z. B. "Doener"), optional mit Kosten.
 export async function addCustomMealPlanEntry(date, mealType, title, price = null) {
+    const { data: meal, error: mealError } = await supabase
+      .from("planned_meals")
+      .insert({ planned_date: date, meal_type: mealType })
+      .select()
+      .single();
+    if (mealError) throw mealError;
+
     const { data, error } = await supabase
       .from("meal_plan_entries")
       .insert({
@@ -428,6 +496,7 @@ export async function addCustomMealPlanEntry(date, mealType, title, price = null
               meal_type: mealType,
               custom_title: title,
               custom_price: price,
+              planned_meal_id: meal.id,
       })
       .select()
       .single();
@@ -436,43 +505,237 @@ export async function addCustomMealPlanEntry(date, mealType, title, price = null
 }
 
 /**
+ * Fuegt einem bereits bestehenden geplanten Essen eine weitere Rezept-
+ * Komponente hinzu (der "+ Gericht/Komponente hinzufügen"-Fall). Aus einem
+ * bis dahin einfachen Einzelrezept-Essen wird dadurch ein mehrteiliges Essen.
+ */
+export async function addComponentToPlannedMeal(plannedMealId, recipeId, servings) {
+  const { data: meal, error: mealError } = await supabase
+    .from("planned_meals")
+    .select("planned_date, meal_type")
+    .eq("id", plannedMealId)
+    .single();
+  if (mealError) throw mealError;
+
+  const { data: siblings, error: siblingsError } = await supabase
+    .from("meal_plan_entries")
+    .select("sort_order")
+    .eq("planned_meal_id", plannedMealId);
+  if (siblingsError) throw siblingsError;
+  const nextSortOrder = siblings.length > 0 ? Math.max(...siblings.map((s) => s.sort_order ?? 0)) + 1 : 0;
+
+  const { data, error } = await supabase
+    .from("meal_plan_entries")
+    .insert({
+      planned_date: meal.planned_date,
+      meal_type: meal.meal_type,
+      recipe_id: recipeId,
+      servings,
+      planned_meal_id: plannedMealId,
+      sort_order: nextSortOrder,
+    })
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+/** Vergibt/aendert den Titel eines geplanten Essens (z. B. "Raclette-Abend"). Ab der 2. Komponente ist ein Titel Pflicht. */
+export async function renamePlannedMeal(plannedMealId, title) {
+  const { error } = await supabase.from("planned_meals").update({ title }).eq("id", plannedMealId);
+  if (error) throw error;
+}
+
+// --------------------------- Essens-Kombinationen ---------------------------
+//
+// Eine Kombination ist eine wiederverwendbare Vorlage fuer ein mehrteiliges
+// Essen (z. B. "Unser Raclette"). Sie verknuepft lediglich bestehende Rezepte
+// miteinander (meal_combination_items.recipe_id) - es werden dabei nie
+// Rezepte kopiert. Beim Einfuegen in den Wochenplan wird die Verknuepfung
+// als Snapshot uebernommen: neue meal_plan_entries-Zeilen, die weiterhin auf
+// dieselben Rezepte verweisen. Spaetere Aenderungen an der Kombination oder
+// am eingefuegten Essen wirken sich NICHT gegenseitig aus.
+
+/** Laedt alle gespeicherten Kombinationen inkl. ihrer Rezept-Komponenten. */
+export async function listMealCombinations() {
+  const { data, error } = await supabase
+    .from("meal_combinations")
+    .select(`
+      id, title, notes, created_at,
+      meal_combination_items ( id, recipe_id, default_servings, sort_order,
+        recipes ( id, title )
+      )
+    `)
+    .order("title");
+  if (error) throw error;
+  return data.map((row) => ({
+    id: row.id,
+    title: row.title,
+    notes: row.notes,
+    items: [...row.meal_combination_items]
+      .sort((a, b) => a.sort_order - b.sort_order)
+      .map((it) => ({
+        id: it.id,
+        recipeId: it.recipe_id,
+        recipeTitle: it.recipes?.title ?? "(gelöschtes Rezept)",
+        defaultServings: Number(it.default_servings),
+      })),
+  }));
+}
+
+/** Speichert die aktuellen Rezept-Komponenten eines geplanten Essens als neue, wiederverwendbare Kombination. */
+export async function saveMealAsCombination(plannedMealId, title) {
+  const { data: entries, error: entriesError } = await supabase
+    .from("meal_plan_entries")
+    .select("recipe_id, servings, sort_order")
+    .eq("planned_meal_id", plannedMealId)
+    .not("recipe_id", "is", null);
+  if (entriesError) throw entriesError;
+  if (!entries || entries.length === 0) {
+    throw new Error("Dieses Essen hat keine Rezept-Komponenten zum Speichern.");
+  }
+
+  const { data: combo, error: comboError } = await supabase
+    .from("meal_combinations")
+    .insert({ title })
+    .select()
+    .single();
+  if (comboError) throw comboError;
+
+  const itemRows = entries.map((e, i) => ({
+    combination_id: combo.id,
+    recipe_id: e.recipe_id,
+    default_servings: e.servings,
+    sort_order: e.sort_order ?? i,
+  }));
+  const { error: itemsError } = await supabase.from("meal_combination_items").insert(itemRows);
+  if (itemsError) throw itemsError;
+
+  return combo;
+}
+
+/**
+ * Fuegt eine gespeicherte Kombination als neues geplantes Essen in einen
+ * Wochenplan-Slot ein (Ein-Klick-Uebernahme). Legt ein neues planned_meal an
+ * (Titel = Kombinations-Titel) und kopiert die Verknuepfungen der
+ * Kombination als eigene, neue meal_plan_entries-Zeilen - die referenzierten
+ * Rezepte selbst werden dabei NICHT dupliziert, nur neu verknuepft.
+ */
+export async function applyCombinationToSlot(date, mealType, combinationId) {
+  const { data: combo, error: comboError } = await supabase
+    .from("meal_combinations")
+    .select(`id, title, meal_combination_items ( recipe_id, default_servings, sort_order )`)
+    .eq("id", combinationId)
+    .single();
+  if (comboError) throw comboError;
+
+  const { data: meal, error: mealError } = await supabase
+    .from("planned_meals")
+    .insert({ planned_date: date, meal_type: mealType, title: combo.title, combination_id: combo.id })
+    .select()
+    .single();
+  if (mealError) throw mealError;
+
+  const items = [...combo.meal_combination_items].sort((a, b) => a.sort_order - b.sort_order);
+  const entryRows = items.map((it, i) => ({
+    planned_date: date,
+    meal_type: mealType,
+    recipe_id: it.recipe_id,
+    servings: it.default_servings,
+    planned_meal_id: meal.id,
+    sort_order: i,
+  }));
+  const { error: insertError } = await supabase.from("meal_plan_entries").insert(entryRows);
+  if (insertError) throw insertError;
+
+  return meal;
+}
+
+/** Loescht eine gespeicherte Kombination (bereits eingeplante Essen, die daraus entstanden sind, bleiben unveraendert erhalten). */
+export async function deleteMealCombination(id) {
+  const { error } = await supabase.from("meal_combinations").delete().eq("id", id);
+  if (error) throw error;
+}
+
+/**
  * Kopiert alle geplanten Mahlzeiten einer Woche in eine andere Zielwoche.
   * Praktisch, wenn man denselben Plan (z. B. "Meal-Prep-Woche") wiederholen
    * moechte, ohne alles erneut einzeln einzutragen. Bestehende Eintraege in der
     * Zielwoche bleiben erhalten, es wird nur ergaenzt (keine Ueberschreibung).
-     * Gibt die Anzahl der kopierten Eintraege zurueck.
-      */
+     * Mehrteilige Essen (mehrere Rezept-Komponenten unter einem planned_meal)
+      * werden dabei als EIN neues, zusammenhaengendes Essen kopiert (inkl. Titel),
+       * zerfallen also beim Kopieren nicht in einzelne, unverbundene Eintraege.
+        * Gibt die Anzahl der kopierten Eintraege zurueck.
+         */
 export async function copyMealPlanWeek(sourceStartDate, sourceEndDate, targetStartDate) {
     const { data: sourceRows, error: fetchError } = await supabase
       .from("meal_plan_entries")
-      .select("planned_date, recipe_id, servings, meal_type, custom_title, custom_price")
+      .select("planned_date, recipe_id, servings, meal_type, custom_title, custom_price, planned_meal_id, sort_order")
       .gte("planned_date", sourceStartDate)
       .lte("planned_date", sourceEndDate);
     if (fetchError) throw fetchError;
     if (!sourceRows || sourceRows.length === 0) return 0;
-  
+
+    const mealIds = [...new Set(sourceRows.map((r) => r.planned_meal_id).filter(Boolean))];
+    let titleByMealId = new Map();
+    if (mealIds.length > 0) {
+      const { data: mealRows, error: mealErr } = await supabase
+        .from("planned_meals")
+        .select("id, title")
+        .in("id", mealIds);
+      if (mealErr) throw mealErr;
+      titleByMealId = new Map(mealRows.map((m) => [m.id, m.title]));
+    }
+
     const dayOffsetMs =
           new Date(`${targetStartDate}T00:00:00`).getTime() - new Date(`${sourceStartDate}T00:00:00`).getTime();
-  
-    const rows = sourceRows.map((row) => {
-          const shifted = new Date(`${row.planned_date}T00:00:00`).getTime() + dayOffsetMs;
+    const shiftDate = (isoDate) => {
+          const shifted = new Date(`${isoDate}T00:00:00`).getTime() + dayOffsetMs;
           const d = new Date(shifted);
-          const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+          return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
                   d.getDate()
                 ).padStart(2, "0")}`;
-          return {
-                  planned_date: iso,
+    };
+
+    // Nach altem planned_meal_id gruppieren, damit mehrteilige Essen beim
+    // Kopieren als EIN neues Essen (mit eigenem neuem planned_meal) ankommen,
+    // statt in einzelne, unverbundene Eintraege zu zerfallen.
+    const groups = new Map();
+    sourceRows.forEach((row, i) => {
+          const key = row.planned_meal_id || `solo:${i}`;
+          if (!groups.has(key)) groups.set(key, []);
+          groups.get(key).push(row);
+    });
+
+    let copiedCount = 0;
+    for (const [key, rows] of groups) {
+          const first = rows[0];
+          const targetDate = shiftDate(first.planned_date);
+          const title = first.planned_meal_id ? titleByMealId.get(first.planned_meal_id) || null : null;
+
+          const { data: newMeal, error: mealInsertError } = await supabase
+            .from("planned_meals")
+            .insert({ planned_date: targetDate, meal_type: first.meal_type, title })
+            .select()
+            .single();
+          if (mealInsertError) throw mealInsertError;
+
+          const entryRows = rows.map((row, i) => ({
+                  planned_date: targetDate,
                   recipe_id: row.recipe_id,
                   servings: row.servings,
                   meal_type: row.meal_type,
                   custom_title: row.custom_title,
                   custom_price: row.custom_price,
-          };
-    });
-  
-    const { error: insertError } = await supabase.from("meal_plan_entries").insert(rows);
-    if (insertError) throw insertError;
-    return rows.length;
+                  planned_meal_id: newMeal.id,
+                  sort_order: row.sort_order ?? i,
+          }));
+          const { error: insertError } = await supabase.from("meal_plan_entries").insert(entryRows);
+          if (insertError) throw insertError;
+          copiedCount += entryRows.length;
+    }
+
+    return copiedCount;
 }
 
 // --------------------------- Einkaufsliste ---------------------------
@@ -507,17 +770,6 @@ export async function toggleShoppingListItem(id, checked) {
   const { error } = await supabase.from("shopping_list_items").update({ checked }).eq("id", id);
   if (error) throw error;
 }
-// Fuegt einen bereits gekauften Posten hinzu (z. B. aus Kassenbon-Scan): direkt abgehakt mit tatsaechlichem Preis.
-export async function addPurchasedShoppingListItem(name, actualPrice) {
-    const { data, error } = await supabase
-      .from("shopping_list_items")
-      .insert({ name, source: "receipt", sort_order: 999, checked: true, actual_price: actualPrice })
-      .select()
-      .single();
-    if (error) throw error;
-    return data;
-}
-
 
 /** Setzt geplanten und/oder tatsaechlichen Preis eines Postens. changes: Teilmenge aus { plannedPrice, actualPrice }. */
 export async function updateShoppingListItemPrice(id, changes = {}) {
@@ -595,6 +847,13 @@ function humanizeCanonicalAmount(canonicalUnit, amount) {
  * Zeile statt als Duplikate. Nur automatisch erzeugte Positionen ("plan")
  * werden ersetzt – manuell hinzugefügte Items und ihr Abhak-Status bleiben
  * erhalten. Gibt die Anzahl der erzeugten Positionen zurück.
+ *
+ * Hinweis Mehrkomponenten-Essen: listMealPlanEntries liefert weiterhin EINE
+ * Zeile je Rezept-Komponente (unabhängig davon, ob mehrere Komponenten zu
+ * einem gemeinsamen planned_meal gehören). Diese Funktion summiert bereits
+ * je recipeId über alle Zeilen im Zeitraum, daher fließen die Zutaten ALLER
+ * Komponenten eines mehrteiligen Essens automatisch mit ein - ohne dass hier
+ * irgendetwas Gruppierungsspezifisches noetig ist.
  */
 export async function generateShoppingList(startDate, endDate) {
   const entries = await listMealPlanEntries(startDate, endDate);
@@ -1037,4 +1296,3 @@ export async function suggestRecipesFromInventory(limit = 6) {
     suggestions.sort((a, b) => b.score - a.score);
     return suggestions.slice(0, limit);
 }
-
