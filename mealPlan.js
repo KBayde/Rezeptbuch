@@ -150,12 +150,7 @@ viewGridBtn.addEventListener("click", () => setViewMode("grid"));
 viewListBtn.addEventListener("click", () => setViewMode("list"));
 syncViewToggleButtons();
 
-function recipeOptionsHtml(mealTypeKey) {
-return allRecipes
-.filter((r) => !r.mealTypes || r.mealTypes.length === 0 || r.mealTypes.includes(mealTypeKey))
-.map((r) => `<option value="${r.id}">${escapeHtml(r.title)}</option>`)
-.join("");
-}
+function recipeOptionsHtml(mealTypeKey) { const matching = []; const others = []; for (const r of allRecipes) { if (r.mealTypes && r.mealTypes.includes(mealTypeKey)) matching.push(r); else others.push(r); } const sortByTitle = (a, b) => a.title.localeCompare(b.title, "de"); matching.sort(sortByTitle); others.sort(sortByTitle); const optHtml = (list) => list.map((r) => `<option value="${r.id}">${escapeHtml(r.title)}</option>`).join(""); if (matching.length === 0) { return `<optgroup label="Alle Rezepte">${optHtml(others)}</optgroup>`; } const mealLabel = MEAL_TYPES.find((mt) => mt.key === mealTypeKey)?.label || mealTypeKey; return `<optgroup label="✓ Passend für ${mealLabel}">${optHtml(matching)}</optgroup><optgroup label="Weitere Rezepte">${optHtml(others)}</optgroup>`; }
 
 // Optgroup mit gespeicherten Essens-Kombinationen ("Unser Raclette" usw.) fuer
 // den Haupt-Rezept-Select jedes Zeitfensters - Ein-Klick-Uebernahme einer
