@@ -5,6 +5,7 @@ import {
     removeMealPlanEntry,
     updateMealPlanEntryServings,
         copyMealPlanWeek,
+        addCustomMealPlanEntry,
     generateShoppingList,
     suggestRecipesFromInventory,
 } from "./db.js";
@@ -16,6 +17,7 @@ import {
     formatDateDisplay,
     WEEKDAY_LABELS_DE,
     MEAL_TYPES,
+        formatPrice,
 } from "./utils.js";
 import { navigate } from "./router.js";
 
@@ -111,20 +113,34 @@ export async function renderMealPlan(container) {
   }
 
   function entryChipHtml(entry) {
-        return `
-              <div class="meal-entry" data-entry-id="${entry.id}">
-                      <a href="#/rezepte/${entry.recipeId}" class="meal-entry-title">${escapeHtml(entry.recipeTitle)}</a>
-                              <div class="meal-entry-meta">
-                                        <input
-                                                    type="number" min="1" step="1" class="meal-entry-servings"
-                                                                data-entry-id="${entry.id}" value="${entry.servings}"
-                                                                          />
-                                                                                    <button class="meal-entry-remove" data-entry-id="${entry.id}" title="Entfernen" type="button">×</button>
-                                                                                            </div>
-                                                                                                  </div>
-                                                                                                      `;
+          if (!entry.recipeId) {
+                    const priceLabel =
+                                entry.customPrice !== null && entry.customPrice !== undefined
+                        ? `<span class="meal-entry-price">${formatPrice(entry.customPrice)} €</span>`
+                                  : "";
+                    return `
+                            <div class="meal-entry meal-entry--custom" data-entry-id="${entry.id}">
+                                      <span class="meal-entry-title">🍽️ ${escapeHtml(entry.recipeTitle)}</span>
+                                                <div class="meal-entry-meta">
+                                                            ${priceLabel}
+                                                                        <button class="meal-entry-remove" data-entry-id="${entry.id}" title="Entfernen" type="button">×</button>
+                                                                                  </div>
+                                                                                          </div>
+                                                                                                `;
+          }
+          return `
+                  <div class="meal-entry" data-entry-id="${entry.id}">
+                                <a href="#/rezepte/${entry.recipeId}" class="meal-entry-title">${escapeHtml(entry.recipeTitle)}</a>
+                                                  <div class="meal-entry-meta">
+                                                                          <input
+                                                                                                      type="number" min="1" step="1" class="meal-entry-servings"
+                                                                                                                                    data-entry-id="${entry.id}" value="${entry.servings}"
+                                                                                                                                                                      />
+                                                                                                                                                                                                          <button class="meal-entry-remove" data-entry-id="${entry.id}" title="Entfernen" type="button">×</button>
+                                                                                                                                                                                                                                              </div>
+                                                                                                                                                                                                                                                                                  </div>
+                                                                                                                                                                                                                                                                                                                      `;
   }
-
   function cellHtml(iso, mealTypeKey, entries) {
         const entriesHtml = entries.map(entryChipHtml).join("");
         return `
@@ -132,6 +148,7 @@ export async function renderMealPlan(container) {
                       <div class="meal-entries">${entriesHtml}</div>
                               <select class="meal-add-select meal-add-select--${mealTypeKey}" data-date="${iso}" data-meal-type="${mealTypeKey}">
                                         <option value="">+ Rezept…</option>
+                                        <option value="__custom__">✏️ Anderes (ohne Rezept)…</option>
                                                   ${recipeOptionsHtml(mealTypeKey)}
                                                           </select>
                                                                 </div>
@@ -185,6 +202,29 @@ export async function renderMealPlan(container) {
                           if (!recipeId) return;
                           const date = select.dataset.date;
                           const mealType = select.dataset.mealType;
+                    if (recipeId === "__custom__") {
+                          const title = prompt("Was hast du gegessen (ohne Rezept)?");
+                          if (!title || !title.trim()) {
+                                  select.value = "";
+                                  return;
+                          }
+                          const priceInput = prompt("Kosten in € (optional, leer lassen zum Überspringen):", "");
+                          let price = null;
+                          if (priceInput !== null && priceInput.trim() !== "") {
+                                  const parsed = Number(priceInput.trim().replace(",", "."));
+                                  if (Number.isFinite(parsed) && parsed >= 0) price = parsed;
+                          }
+                          select.disabled = true;
+                          try {
+                                  await addCustomMealPlanEntry(date, mealType, title.trim(), price);
+                                  await load();
+                          } catch (err) {
+                                  alert("Konnte Eintrag nicht speichern: " + err.message);
+                                  select.disabled = false;
+                                  select.value = "";
+                          }
+                          return;
+                    }
                           const recipe = allRecipes.find((r) => r.id === recipeId);
                           const servings = recipe ? Math.max(1, Math.round(recipe.servingsBase)) : 2;
                           const dayCount = armTwoDays ? 2 : 1;
