@@ -4,7 +4,7 @@ import {
   updateInventoryItem,
   deleteInventoryItem,
 } from "./db.js";
-import { escapeHtml, formatQuantity, formatDateDisplayFull, daysUntil } from "./utils.js";
+import { escapeHtml, formatQuantity, formatDateDisplayFull, daysUntil, unitOptionsHtml } from "./utils.js";
 
 /** Liefert Anzeigetext + CSS-Modifier für die MHD-Badge eines Inventar-Eintrags. */
 function expiryBadge(expiryDate) {
@@ -32,7 +32,7 @@ export async function renderInventory(container) {
     <form id="add-inventory-form" class="inventory-add-form">
       <input type="text" id="inv-name" class="search-input" placeholder="Name (z. B. Rucola)" required />
       <input type="number" id="inv-quantity" step="any" min="0" placeholder="Menge" />
-      <input type="text" id="inv-unit" placeholder="Einheit" />
+              <select id="inv-unit" required>${unitOptionsHtml("Stück")}</select>
       <input type="date" id="inv-expiry" title="Mindesthaltbarkeitsdatum (optional)" />
       <button type="submit" class="btn btn-primary">+ Hinzufügen</button>
     </form>
@@ -64,10 +64,7 @@ export async function renderInventory(container) {
             type="number" step="any" min="0" class="inventory-qty-input"
             data-item-id="${item.id}" value="${item.quantity ?? ""}" placeholder="Menge"
           />
-          <input
-            type="text" class="inventory-unit-input"
-            data-item-id="${item.id}" value="${escapeHtml(item.unit || "")}" placeholder="Einheit"
-          />
+          <select class="inventory-unit-input" data-item-id="${item.id}">${unitOptionsHtml(item.unit || "Stück")}</select>
           <input
             type="date" class="inventory-expiry-input"
             data-item-id="${item.id}" value="${item.expiryDate || ""}"
