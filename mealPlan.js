@@ -4,6 +4,7 @@ import {
     addMealPlanEntryForDays,
     removeMealPlanEntry,
     updateMealPlanEntryServings,
+        copyMealPlanWeek,
     generateShoppingList,
     suggestRecipesFromInventory,
 } from "./db.js";
@@ -33,9 +34,18 @@ export async function renderMealPlan(container) {
                                                 <button id="prev-week-btn" class="btn btn-secondary btn-small" type="button">← Vorige</button>
                                                         <button id="today-week-btn" class="btn btn-secondary btn-small" type="button">Diese Woche</button>
                                                                 <button id="next-week-btn" class="btn btn-secondary btn-small" type="button">Nächste →</button>
+                                                                <button id="copy-week-btn" class="btn btn-secondary btn-small" type="button">📋 Woche kopieren</button>
                                                                       </div>
                                                                           </div>
 
+                                                                              <div class="week-copy-row" id="week-copy-row" hidden>
+                                                                              <label class="text-small text-muted" for="week-copy-target">Zielwoche (beliebiger Tag der Woche):</label>
+                                                                              <input type="date" id="week-copy-target" />
+                                                                              <button id="week-copy-confirm-btn" class="btn btn-small btn-primary" type="button">Kopieren</button>
+                                                                              <button id="week-copy-cancel-btn" class="btn btn-small btn-secondary" type="button">Abbrechen</button>
+                                                                              <span id="week-copy-status" class="text-small text-muted"></span>
+                                                                              </div>
+                                                                              
                                                                               <div class="two-day-toggle-row">
                                                                                     <button id="two-day-toggle" class="chip chip-toggle" type="button" title="Bei der nächsten Rezeptauswahl auch für den Folgetag einplanen">
                                                                                             🗓️ Nächste Auswahl auch für Folgetag planen
@@ -68,6 +78,12 @@ export async function renderMealPlan(container) {
     const twoDayHint = container.querySelector("#two-day-hint");
     const suggestionCard = container.querySelector("#suggestion-card");
     const suggestionList = container.querySelector("#suggestion-list");
+      const copyWeekBtn = container.querySelector("#copy-week-btn");
+      const weekCopyRow = container.querySelector("#week-copy-row");
+      const weekCopyTarget = container.querySelector("#week-copy-target");
+      const weekCopyConfirmBtn = container.querySelector("#week-copy-confirm-btn");
+      const weekCopyCancelBtn = container.querySelector("#week-copy-cancel-btn");
+      const weekCopyStatus = container.querySelector("#week-copy-status");
 
   let allRecipes = [];
     try {
@@ -243,7 +259,51 @@ export async function renderMealPlan(container) {
           load();
     });
 
-  shoppingBtn.addEventListener("click", async () => {
+  copyWeekBtn.addEventListener("click", () => {
+        weekCopyRow.hidden = !weekCopyRow.hidden;
+        weekCopyStatus.textContent = "";
+        if (!weekCopyRow.hidden && !weekCopyTarget.value) {
+                weekCopyTarget.value = formatDateISO(addDays(currentWeekStart, 7));
+        }
+  });
+    
+    weekCopyCancelBtn.addEventListener("click", () => {
+          weekCopyRow.hidden = true;
+    });
+    
+    weekCopyConfirmBtn.addEventListener("click", async () => {
+          if (!weekCopyTarget.value) {
+                  weekCopyStatus.textContent = "Bitte ein Zieldatum waehlen.";
+                  return;
+          }
+          const targetWeekStart = getWeekStart(new Date(`${weekCopyTarget.value}T00:00:00`));
+          const targetStartIso = formatDateISO(targetWeekStart);
+          weekCopyConfirmBtn.disabled = true;
+          weekCopyStatus.textContent = "Kopiere…";
+          try {
+                  const start = formatDateISO(currentWeekStart);
+                  const end = formatDateISO(addDays(currentWeekStart, 6));
+                  const count = await copyMealPlanWeek(start, end, targetStartIso);
+                  weekCopyStatus.textContent =
+                            count > 0
+                              ? `${count} Mahlzeit${count === 1 ? "" : "en"} in Zielwoche kopiert.`
+                              : "Diese Woche hat keine Eintraege zum Kopieren.";
+                  weekCopyConfirmBtn.disabled = false;
+                  if (count > 0) {
+                            if (formatDateISO(currentWeekStart) === formatDateISO(targetWeekStart)) {
+                                        await load();
+                            }
+                            setTimeout(() => {
+                                        weekCopyRow.hidden = true;
+                            }, 2500);
+                  }
+          } catch (err) {
+                  weekCopyStatus.textContent = "Fehler: " + err.message;
+                  weekCopyConfirmBtn.disabled = false;
+          }
+    });
+    
+    shoppingBtn.addEventListener("click", async () => {
         shoppingBtn.disabled = true;
         const originalLabel = shoppingBtn.textContent;
         shoppingBtn.textContent = "Erstelle…";
