@@ -145,9 +145,7 @@ export async function renderRecipeForm(container, { id } = {}) {
       </section>
 
       <section class="card stack-md">
-        <h2>Zubereitungsschritte</h2>
-        <div id="steps-editor" class="steps-editor"></div>
-        <button type="button" id="add-step" class="btn btn-secondary">+ Schritt hinzufügen</button>
+        <h2>Zubereitungsschritte</h2> <div id="steps-editor" class="steps-editor"></div> <div class="steps-actions"> <button type="button" id="add-step" class="btn btn-secondary">+ Schritt hinzufügen</button> <button type="button" id="suggest-steps-btn" class="btn btn-secondary">🤖 Zubereitung mit KI vorschlagen</button> </div> <p id="suggest-steps-error" class="form-error" hidden></p>
       </section>
 
       <section class="card stack-md">
@@ -314,12 +312,7 @@ export async function renderRecipeForm(container, { id } = {}) {
       )
       .join("");
   }
-  container.querySelector("#add-step").addEventListener("click", () => {
-    syncStepsFromDom();
-    state.steps.push({ instruction: "" });
-    renderSteps();
-  });
-  stepsEditor.addEventListener("click", (e) => {
+  container.querySelector("#add-step").addEventListener("click", () => { syncStepsFromDom(); state.steps.push({ instruction: "" }); renderSteps(); }); const suggestStepsBtn = container.querySelector("#suggest-steps-btn"); const suggestStepsError = container.querySelector("#suggest-steps-error"); suggestStepsBtn.addEventListener("click", async () => { syncIngredientsFromDom(); syncStepsFromDom(); suggestStepsError.hidden = true; const titleValue = container.querySelector('input[name="title"]').value.trim(); const notesValue = container.querySelector('textarea[name="notes"]').value.trim(); const prepTimeValue = container.querySelector('input[name="prepTimeMinutes"]').value; const ingredientsForApi = state.ingredients.filter((ing) => ing.name.trim()).map((ing) => ({ name: ing.name.trim(), quantity: ing.quantity, unit: ing.unitAbbreviation, note: ing.note })); if (ingredientsForApi.length === 0) { suggestStepsError.textContent = "Bitte zuerst mindestens eine Zutat eingeben."; suggestStepsError.hidden = false; return; } const hasExistingSteps = state.steps.some((s) => s.instruction.trim()); if (hasExistingSteps && !confirm("Vorhandene Zubereitungsschritte durch einen KI-Vorschlag ersetzen?")) { return; } suggestStepsBtn.disabled = true; const originalLabel = suggestStepsBtn.textContent; suggestStepsBtn.textContent = "Generiere…"; try { const res = await fetch("/api/suggest-recipe-steps", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ title: titleValue, prepTimeMinutes: prepTimeValue ? Number(prepTimeValue) : null, notes: notesValue, ingredients: ingredientsForApi }) }); const data = await res.json(); if (!res.ok) throw new Error(data.error || "Vorschlag konnte nicht erstellt werden."); if (!Array.isArray(data.steps) || data.steps.length === 0) { throw new Error("Keine Zubereitungsschritte erhalten."); } state.steps = data.steps.map((instruction) => ({ instruction })); renderSteps(); } catch (err) { suggestStepsError.textContent = "KI-Vorschlag fehlgeschlagen: " + err.message; suggestStepsError.hidden = false; } finally { suggestStepsBtn.disabled = false; suggestStepsBtn.textContent = originalLabel; } }); stepsEditor.addEventListener("click", (e) => {
     syncStepsFromDom();
     const removeBtn = e.target.closest("[data-remove-step]");
     const upBtn = e.target.closest("[data-move-step-up]");
