@@ -485,32 +485,7 @@ export async function removeMealPlanEntry(id) {
 }
 
 // Legt einen Wochenplan-Eintrag ohne Rezept an (z. B. "Doener"), optional mit Kosten.
-export async function addCustomMealPlanEntry(date, mealType, title, price = null) {
-    const { data: meal, error: mealError } = await supabase
-      .from("planned_meals")
-      .insert({ planned_date: date, meal_type: mealType, workspace: currentWorkspace })
-      .select()
-      .single();
-    if (mealError) throw mealError;
-
-    const { data, error } = await supabase
-      .from("meal_plan_entries")
-      .insert({
-              planned_date: date,
-              recipe_id: null,
-              servings: 1,
-              meal_type: mealType,
-              custom_title: title,
-              custom_price: price,
-              planned_meal_id: meal.id,
-              workspace: currentWorkspace,
-      })
-      .select()
-      .single();
-    if (error) throw error;
-    return data;
-}
-
+export async function addCustomMealPlanEntry(date, mealType, title, price = null) { const { data: meal, error: mealError } = await supabase.from("planned_meals").insert({ planned_date: date, meal_type: mealType, workspace: currentWorkspace }).select().single(); if (mealError) throw mealError; const { data, error } = await supabase.from("meal_plan_entries").insert({ planned_date: date, recipe_id: null, servings: 1, meal_type: mealType, custom_title: title, custom_price: price, planned_meal_id: meal.id, workspace: currentWorkspace, }).select().single(); if (error) throw error; return data; } export async function listRecentCustomMealTitles(limit = 12) { const { data, error } = await supabase.from("meal_plan_entries").select("custom_title, custom_price, planned_date").eq("workspace", currentWorkspace).is("recipe_id", null).not("custom_title", "is", null).order("planned_date", { ascending: false }); if (error) throw error; const byTitle = new Map(); for (const row of data || []) { const key = (row.custom_title || "").trim(); if (!key) continue; if (!byTitle.has(key)) { byTitle.set(key, { title: key, price: row.custom_price === null || row.custom_price === undefined ? null : Number(row.custom_price), count: 1 }); } else { byTitle.get(key).count += 1; } } return [...byTitle.values()].sort((a, b) => b.count - a.count).slice(0, limit); }
 /**
  * Fuegt einem bereits bestehenden geplanten Essen eine weitere Rezept-
  * Komponente hinzu (der "+ Gericht/Komponente hinzufügen"-Fall). Aus einem
