@@ -5,6 +5,7 @@ addMealPlanEntryForDays,
 removeMealPlanEntry,
 updateMealPlanEntryServings,
 copyMealPlanWeek,
+clearMealPlanWeek,
 addCustomMealPlanEntry, listRecentCustomMealTitles, addCustomComponentToPlannedMeal,
 generateShoppingList,
 suggestRecipesFromInventory,
@@ -49,6 +50,7 @@ container.innerHTML = `
         <button id="today-week-btn" class="btn btn-secondary btn-small" type="button">Diese Woche</button>
         <button id="next-week-btn" class="btn btn-secondary btn-small" type="button">Nächste →</button>
         <button id="copy-week-btn" class="btn btn-secondary btn-small" type="button">📋 Woche kopieren</button>
+<button id="clear-week-btn" class="btn btn-secondary btn-small" type="button">🗑️ Woche leeren</button>
       </div>
     </div>
 
@@ -101,6 +103,7 @@ const twoDayHint = container.querySelector("#two-day-hint");
 const suggestionCard = container.querySelector("#suggestion-card");
 const suggestionList = container.querySelector("#suggestion-list");
 const copyWeekBtn = container.querySelector("#copy-week-btn");
+const clearWeekBtn = container.querySelector("#clear-week-btn");
 const weekCopyRow = container.querySelector("#week-copy-row");
 const weekCopyTarget = container.querySelector("#week-copy-target");
 const weekCopyConfirmBtn = container.querySelector("#week-copy-confirm-btn");
@@ -444,6 +447,22 @@ weekCopyStatus.textContent = "";
 if (!weekCopyRow.hidden && !weekCopyTarget.value) {
 weekCopyTarget.value = formatDateISO(addDays(currentWeekStart, 7));
 }
+});
+
+clearWeekBtn.addEventListener("click", async () => {
+  const start = formatDateISO(currentWeekStart);
+  const end = formatDateISO(addDays(currentWeekStart, 6));
+  const label = `${formatDateDisplay(currentWeekStart)} – ${formatDateDisplay(addDays(currentWeekStart, 6))}`;
+  if (!confirm(`Wirklich ALLE Einträge der Woche ${label} löschen? Das kann nicht rückgängig gemacht werden.`)) return;
+  clearWeekBtn.disabled = true;
+  try {
+    await clearMealPlanWeek(start, end);
+    await load();
+  } catch (err) {
+    alert("Woche konnte nicht geleert werden: " + err.message);
+  } finally {
+    clearWeekBtn.disabled = false;
+  }
 });
 
 weekCopyCancelBtn.addEventListener("click", () => {
