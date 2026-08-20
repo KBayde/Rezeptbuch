@@ -545,11 +545,7 @@ textarea { resize: vertical; font-family: var(--font-body); }
 
 /* ------------------------------ Formular: Zutaten/Schritte ------------------------------ */
 
-.ingredients-editor, .steps-editor {
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-}
+.ingredients-editor, .steps-editor { display: flex; flex-direction: column; gap: 0.6rem; } .steps-actions { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
 
 .ingredient-row {
   display: grid;
