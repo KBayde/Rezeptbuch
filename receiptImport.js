@@ -229,7 +229,7 @@ addToListBtn.addEventListener("click", async () => {
         await toggleShoppingListItem(match.id, true);
         updatedCount++;
       } else {
-        await addPurchasedShoppingListItem(item.name.trim(), item.price);
+        await addPurchasedShoppingListItem(item.name.trim(), item.price, true);
         addedCount++;
       }
     }
