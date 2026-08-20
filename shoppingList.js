@@ -4,6 +4,7 @@ import {
     toggleShoppingListItem,
     deleteShoppingListItem,
     clearCheckedShoppingListItems,
+clearShoppingList,
     addInventoryItem,
     updateShoppingListItemPrice,
     getAveragePrice,
@@ -63,6 +64,7 @@ export async function renderShoppingList(container) {
                                                                                                                         <a href="#/einkaufsliste/kassenbon-scan" class="btn btn-secondary">📷 Kassenbon scannen</a>
                                                                                                                               <button id="move-checked-to-inventory-btn" class="btn btn-secondary" type="button">→ Erledigte in Vorrat übernehmen</button>
                                                                                                                                     <button id="clear-checked-btn" class="btn btn-secondary" type="button">Erledigte entfernen</button>
+<button id="clear-all-btn" class="btn btn-secondary" type="button">🗑️ Alles löschen</button>
                                                                                                                                         </div>
                                                                                                                                           `;
 
@@ -76,6 +78,7 @@ export async function renderShoppingList(container) {
     const priceInput = container.querySelector("#add-item-price");
     const moveCheckedBtn = container.querySelector("#move-checked-to-inventory-btn");
     const clearCheckedBtn = container.querySelector("#clear-checked-btn");
+const clearAllBtn = container.querySelector("#clear-all-btn");
 
   let currentItems = [];
 
@@ -349,6 +352,7 @@ ${spontaneousItems.map(itemHtml).join("")}
         emptyState.hidden = items.length > 0;
         moveCheckedBtn.disabled = checkedCount === 0;
         clearCheckedBtn.disabled = checkedCount === 0;
+clearAllBtn.disabled = items.length === 0;
         updateCostSummary(items);
 
       const groups = groupByCategory(items);
@@ -381,7 +385,19 @@ ${spontaneousItems.map(itemHtml).join("")}
         }
   });
 
-  moveCheckedBtn.addEventListener("click", async () => {
+  clearAllBtn.addEventListener("click", async () => {
+  if (!confirm("Wirklich die GESAMTE Einkaufsliste löschen (auch nicht abgehakte Posten)? Das kann nicht rückgängig gemacht werden.")) return;
+  clearAllBtn.disabled = true;
+  try {
+    await clearShoppingList();
+    await load();
+  } catch (err) {
+    alert("Liste konnte nicht geleert werden: " + err.message);
+    clearAllBtn.disabled = false;
+  }
+});
+
+moveCheckedBtn.addEventListener("click", async () => {
         const checkedItems = currentItems.filter((i) => i.checked);
         if (!checkedItems.length) return;
         moveCheckedBtn.disabled = true;
