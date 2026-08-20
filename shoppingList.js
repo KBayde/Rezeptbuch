@@ -167,14 +167,33 @@ input.addEventListener("blur", async () => {
   }
 
   function groupByCategory(items) {
-        const groups = new Map();
-        for (const item of items) {
-                const cat = categorizeIngredient(item.name);
-                if (!groups.has(cat.key)) groups.set(cat.key, { ...cat, items: [] });
-                groups.get(cat.key).items.push(item);
-        }
-        return CATEGORY_ORDER.filter((key) => groups.has(key)).map((key) => groups.get(key));
-  }
+const groups = new Map();
+for (const item of items) {
+if (item.source === "receipt_spontaneous") continue;
+const cat = categorizeIngredient(item.name);
+if (!groups.has(cat.key)) groups.set(cat.key, { ...cat, items: [] });
+groups.get(cat.key).items.push(item);
+}
+return CATEGORY_ORDER.filter((key) => groups.has(key)).map((key) => groups.get(key));
+}
+
+function spontaneousGroupHtml(items) {
+const spontaneousItems = items.filter((i) => i.source === "receipt_spontaneous");
+if (spontaneousItems.length === 0) return "";
+return `
+<section class="shopping-category shopping-category--spontaneous">
+<h2 class="shopping-category-header">
+<span class="shopping-category-icon">🎲</span>
+Spontankäufe
+<span class="shopping-category-count">${spontaneousItems.length}</span>
+</h2>
+<p class="text-muted text-small">Beim Kassenbon-Scan erkannt, standen aber nicht auf der Liste.</p>
+<ul class="shopping-category-items">
+${spontaneousItems.map(itemHtml).join("")}
+</ul>
+</section>
+`;
+}
 
   function groupHtml(group) {
         return `
@@ -333,7 +352,7 @@ input.addEventListener("blur", async () => {
         updateCostSummary(items);
 
       const groups = groupByCategory(items);
-        list.innerHTML = groups.map(groupHtml).join("");
+        list.innerHTML = spontaneousGroupHtml(items) + groups.map(groupHtml).join("");
         wireItems();
   }
 
