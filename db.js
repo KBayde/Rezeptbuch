@@ -760,10 +760,10 @@ export async function toggleShoppingListItem(id, checked) {
 }
 
         // Fuegt einen bereits gekauften Posten hinzu (z. B. aus Kassenbon-Scan): direkt abgehakt mit tatsaechlichem Preis.
-export async function addPurchasedShoppingListItem(name, actualPrice) {
+export async function addPurchasedShoppingListItem(name, actualPrice, spontaneous = false) {
   const { data, error } = await supabase
   .from("shopping_list_items")
-  .insert({ name, source: "receipt", sort_order: 999, checked: true, actual_price: actualPrice, workspace: currentWorkspace })
+  .insert({ name, source: spontaneous ? "receipt_spontaneous" : "receipt", sort_order: 999, checked: true, actual_price: actualPrice, workspace: currentWorkspace })
   .select()
   .single();
   if (error) throw error;
@@ -795,7 +795,7 @@ export async function deleteShoppingListItem(id) {
 export async function clearCheckedShoppingListItems() {
     const { data: checkedItems, error: fetchError } = await supabase
       .from("shopping_list_items")
-      .select("name, unit, planned_price, actual_price")
+      .select("name, unit, planned_price, actual_price, source")
       .eq("checked", true)
       .eq("workspace", currentWorkspace);
     if (fetchError) throw fetchError;
@@ -1024,6 +1024,7 @@ async function recordPurchaseHistory(items) {
                             price: actual,
                             unit: item.unit || null,
                             recorded_date: todayIso,
+                            is_spontaneous: item.source === "receipt_spontaneous",
                             workspace: currentWorkspace,
                   });
           }
@@ -1092,6 +1093,7 @@ export async function getPriceHistoryInRange(startDate, endDate) {
           price: Number(row.price),
           unit: row.unit,
           recordedDate: row.recorded_date,
+          isSpontaneous: !!row.is_spontaneous,
     }));
 }
 
