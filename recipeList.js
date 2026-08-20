@@ -77,19 +77,19 @@ export async function renderRecipeList(container) {
 
     mealTypeFilter.innerHTML =
       `<option value="">Alle Tageszeiten</option>` +
-      MEAL_TYPES.map((mt) => `<option value="$\{mt.key}">$\{mt.icon} $\{escapeHtml(mt.label)}</option>`).join("");
+      MEAL_TYPES.map((mt) => `<option value="${mt.key}">${mt.icon} ${escapeHtml(mt.label)}</option>`).join("");
 
     dishFilter.innerHTML =
       `<option value="">Alle Gerichtarten</option>` +
-      tagsByCategory("gerichtart").map((t) => `<option value="$\{escapeHtml(t)}">$\{escapeHtml(t)}</option>`).join("");
+      tagsByCategory("gerichtart").map((t) => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join("");
 
     ingredientFilter.innerHTML =
       `<option value="">Alle Zutaten</option>` +
-      tagsByCategory("zutat").map((t) => `<option value="$\{escapeHtml(t)}">$\{escapeHtml(t)}</option>`).join("");
+      tagsByCategory("zutat").map((t) => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join("");
 
     cuisineFilter.innerHTML =
       `<option value="">Alle Küchen</option>` +
-      tagsByCategory("kueche").map((t) => `<option value="$\{escapeHtml(t)}">$\{escapeHtml(t)}</option>`).join("");
+      tagsByCategory("kueche").map((t) => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join("");
 
   function applyFilters() {
         const query = searchInput.value.trim().toLowerCase();
