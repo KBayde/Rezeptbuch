@@ -115,8 +115,15 @@ export async function renderHouseholdCosts(container) {
                                                                                                                                                                                                                                                                 </div>
                                                                                                                                                                                                                                                                       </div>
                                                                                                                                                                                                                                                                       
-                                                                                                                                                                                                                                                                            <div class="card">
-                                                                                                                                                                                                                                                                                    <h2>Letzte Ausgaben</h2>
+                                                                                                                                                                                                                                                                            <div class="card cost-spontaneous-card" id="cost-spontaneous-card" hidden>
+<h2>🎲 Spontankäufe</h2>
+<p class="text-muted">Beim Kassenbon-Scan erkannt, standen aber nicht auf der Liste – dein Spontan-Anteil an den Ausgaben.</p>
+<p class="cost-spontaneous-ratio" id="cost-spontaneous-ratio"></p>
+<ul class="cost-recent-list" id="cost-spontaneous-list"></ul>
+</div>
+
+<div class="card">
+<h2>Letzte Ausgaben</h2>
                                                                                                                                                                                                                                                                                             <ul class="cost-recent-list" id="cost-recent-list"></ul>
                                                                                                                                                                                                                                                                                                     <p class="empty-state" id="cost-recent-empty" hidden>Noch keine Ausgaben erfasst.</p>
                                                                                                                                                                                                                                                                                                           </div>
@@ -254,7 +261,7 @@ export async function renderHouseholdCosts(container) {
         // price_history / weekly_household_costs gesichert werden.
         const liveActualEntries = liveItems
             .filter((i) => i.checked && i.actualPrice !== null)
-            .map((i) => ({ ingredientName: i.name, price: i.actualPrice, recordedDate: todayIso }));
+            .map((i) => ({ ingredientName: i.name, price: i.actualPrice, recordedDate: todayIso, isSpontaneous: i.source === "receipt_spontaneous" }));
           const livePlannedSum = liveItems.reduce((s, i) => s + (i.plannedPrice || 0), 0);
           const liveActualSum = liveActualEntries.reduce((s, e) => s + e.price, 0);
           const customMealEntries = customMealCosts.map((c) => ({ ingredientName: c.title, price: c.price, recordedDate: c.date }));
@@ -286,6 +293,20 @@ export async function renderHouseholdCosts(container) {
                   prevActual = weeksInPrevMonth.reduce((s, w) => s + w.actualTotal, 0);
                   prevLabel = "letzter Monat";
         }
+
+const spontaneousCard = content.querySelector("#cost-spontaneous-card");
+const spontaneousRatioEl = content.querySelector("#cost-spontaneous-ratio");
+const spontaneousListEl = content.querySelector("#cost-spontaneous-list");
+const spontaneousEntries = combinedEntries.filter((e) => e.isSpontaneous);
+const spontaneousTotal = spontaneousEntries.reduce((s, e) => s + e.price, 0);
+if (spontaneousTotal > 0 && totalActual > 0) {
+spontaneousCard.hidden = false;
+const pct = Math.round((spontaneousTotal / totalActual) * 100);
+spontaneousRatioEl.innerHTML = `<span class="trend-latest">${formatPrice(spontaneousTotal)} €</span> <span class="text-muted">von ${formatPrice(totalActual)} € (${pct}%)</span>`;
+spontaneousListEl.innerHTML = recentListHtml(spontaneousEntries.sort((a, b) => b.recordedDate.localeCompare(a.recordedDate)).slice(0, 8), todayIso);
+} else {
+spontaneousCard.hidden = true;
+}
 
         // ---- Kopfbereich: Summe + Vergleich ----
         const periodLabelEl = content.querySelector("#cost-period-label");
