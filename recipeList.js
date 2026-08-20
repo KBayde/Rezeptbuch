@@ -1,5 +1,5 @@
-import { listRecipes, getExpiringInventoryItems } from "./db.js";
-import { debounce, escapeHtml, formatMinutes } from "./utils.js";
+import { listRecipes, getExpiringInventoryItems, listTags } from "./db.js";
+import { debounce, escapeHtml, formatMinutes, MEAL_TYPES } from "./utils.js";
 import { navigate } from "./router.js";
 
 export async function renderRecipeList(container) {
@@ -22,17 +22,26 @@ export async function renderRecipeList(container) {
                                                                                                     </div>
                                                                                                         </div>
                                                                                                         
-                                                                                                            <div class="toolbar">
-                                                                                                                  <input
-                                                                                                                          type="search"
-                                                                                                                                  id="search-input"
-                                                                                                                                          class="search-input"
-                                                                                                                                                  placeholder="Suche nach Titel oder Zutat…"
-                                                                                                                                                        />
-                                                                                                                                                              <select id="tag-filter" class="select">
-                                                                                                                                                                      <option value="">Alle Kategorien</option>
-                                                                                                                                                                            </select>
-                                                                                                                                                                                </div>
+                                                                                                            <div class="toolbar toolbar--wrap">
+      <input
+        type="search"
+        id="search-input"
+        class="search-input"
+        placeholder="Suche nach Titel oder Zutat…"
+      />
+      <select id="filter-mealtype" class="select">
+        <option value="">Alle Tageszeiten</option>
+      </select>
+      <select id="filter-dish" class="select">
+        <option value="">Alle Gerichtarten</option>
+      </select>
+      <select id="filter-ingredient" class="select">
+        <option value="">Alle Zutaten</option>
+      </select>
+      <select id="filter-cuisine" class="select">
+        <option value="">Alle Küchen</option>
+      </select>
+    </div>
                                                                                                                                                                                 
                                                                                                                                                                                     <div id="recipe-grid" class="recipe-grid"></div>
                                                                                                                                                                                         <p id="empty-state" class="empty-state" hidden>Keine Rezepte gefunden.</p>
@@ -42,7 +51,10 @@ export async function renderRecipeList(container) {
     const countEl = container.querySelector("#recipe-count");
     const emptyState = container.querySelector("#empty-state");
     const searchInput = container.querySelector("#search-input");
-    const tagFilter = container.querySelector("#tag-filter");
+    const mealTypeFilter = container.querySelector("#filter-mealtype");
+    const dishFilter = container.querySelector("#filter-dish");
+    const ingredientFilter = container.querySelector("#filter-ingredient");
+    const cuisineFilter = container.querySelector("#filter-cuisine");
 
   grid.innerHTML = `<p class="text-muted">Lade Rezepte…</p>`;
 
@@ -54,18 +66,42 @@ export async function renderRecipeList(container) {
           return;
     }
 
-  const allTags = [...new Set(allRecipes.flatMap((r) => r.tags))].sort();
-    tagFilter.innerHTML =
-          `<option value="">Alle Kategorien</option>` +
-          allTags.map((t) => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join("");
+  const tagCategoryByName = new Map(allTagRows.map((t) => [t.name, t.category || "sonstiges"]));
+    const usedTags = [...new Set(allRecipes.flatMap((r) => r.tags))];
+    function tagsByCategory(cat) {
+      return usedTags
+        .filter((t) => (tagCategoryByName.get(t) || "sonstiges") === cat)
+        .sort((a, b) => a.localeCompare(b, "de"));
+    }
+
+    mealTypeFilter.innerHTML =
+      `<option value="">Alle Tageszeiten</option>` +
+      MEAL_TYPES.map((mt) => `<option value="$\{mt.key}">$\{mt.icon} $\{escapeHtml(mt.label)}</option>`).join("");
+
+    dishFilter.innerHTML =
+      `<option value="">Alle Gerichtarten</option>` +
+      tagsByCategory("gerichtart").map((t) => `<option value="$\{escapeHtml(t)}">$\{escapeHtml(t)}</option>`).join("");
+
+    ingredientFilter.innerHTML =
+      `<option value="">Alle Zutaten</option>` +
+      tagsByCategory("zutat").map((t) => `<option value="$\{escapeHtml(t)}">$\{escapeHtml(t)}</option>`).join("");
+
+    cuisineFilter.innerHTML =
+      `<option value="">Alle Küchen</option>` +
+      tagsByCategory("kueche").map((t) => `<option value="$\{escapeHtml(t)}">$\{escapeHtml(t)}</option>`).join("");
 
   function applyFilters() {
         const query = searchInput.value.trim().toLowerCase();
-        const tag = tagFilter.value;
+    const mealType = mealTypeFilter.value;
+    const dish = dishFilter.value;
+    const ingredient = ingredientFilter.value;
+    const cuisine = cuisineFilter.value;
 
-      const filtered = allRecipes.filter((r) => {
-              const matchesTag = !tag || r.tags.includes(tag);
-              if (!matchesTag) return false;
+    const filtered = allRecipes.filter((r) => {
+      if (mealType && !(r.mealTypes || []).includes(mealType)) return false;
+      if (dish && !r.tags.includes(dish)) return false;
+      if (ingredient && !r.tags.includes(ingredient)) return false;
+      if (cuisine && !r.tags.includes(cuisine)) return false;
               if (!query) return true;
               const haystack = [
                         r.title,
@@ -89,7 +125,10 @@ export async function renderRecipeList(container) {
   }
 
   searchInput.addEventListener("input", debounce(applyFilters, 150));
-    tagFilter.addEventListener("change", applyFilters);
+    mealTypeFilter.addEventListener("change", applyFilters);
+    dishFilter.addEventListener("change", applyFilters);
+    ingredientFilter.addEventListener("change", applyFilters);
+    cuisineFilter.addEventListener("change", applyFilters);
 
   grid.addEventListener("click", (e) => {
         const card = e.target.closest("[data-recipe-id]");
