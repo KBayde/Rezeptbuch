@@ -59,8 +59,9 @@ export async function renderRecipeList(container) {
   grid.innerHTML = `<p class="text-muted">Lade Rezepte…</p>`;
 
   let allRecipes = [];
+    let allTagRows = [];
     try {
-          allRecipes = await listRecipes();
+      [allRecipes, allTagRows] = await Promise.all([listRecipes(), listTags()]);
     } catch (err) {
           grid.innerHTML = `<p class="form-error">Rezepte konnten nicht geladen werden: ${escapeHtml(err.message)}</p>`;
           return;
