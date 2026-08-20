@@ -485,7 +485,7 @@ export async function removeMealPlanEntry(id) {
 }
 
 // Legt einen Wochenplan-Eintrag ohne Rezept an (z. B. "Doener"), optional mit Kosten.
-export async function addCustomMealPlanEntry(date, mealType, title, price = null) { const { data: meal, error: mealError } = await supabase.from("planned_meals").insert({ planned_date: date, meal_type: mealType, workspace: currentWorkspace }).select().single(); if (mealError) throw mealError; const { data, error } = await supabase.from("meal_plan_entries").insert({ planned_date: date, recipe_id: null, servings: 1, meal_type: mealType, custom_title: title, custom_price: price, planned_meal_id: meal.id, workspace: currentWorkspace, }).select().single(); if (error) throw error; return data; } export async function listRecentCustomMealTitles(limit = 12) { const { data, error } = await supabase.from("meal_plan_entries").select("custom_title, custom_price, planned_date").eq("workspace", currentWorkspace).is("recipe_id", null).not("custom_title", "is", null).order("planned_date", { ascending: false }); if (error) throw error; const byTitle = new Map(); for (const row of data || []) { const key = (row.custom_title || "").trim(); if (!key) continue; if (!byTitle.has(key)) { byTitle.set(key, { title: key, price: row.custom_price === null || row.custom_price === undefined ? null : Number(row.custom_price), count: 1 }); } else { byTitle.get(key).count += 1; } } return [...byTitle.values()].sort((a, b) => b.count - a.count).slice(0, limit); }
+export async function addCustomMealPlanEntry(date, mealType, title, price = null, extraItems = []) { const items = (extraItems || []).map((t) => (t || "").trim()).filter(Boolean); const mealTitle = items.length > 0 ? title : null; const { data: meal, error: mealError } = await supabase.from("planned_meals").insert({ planned_date: date, meal_type: mealType, title: mealTitle, workspace: currentWorkspace }).select().single(); if (mealError) throw mealError; const itemTitles = items.length > 0 ? items : [title]; const rows = itemTitles.map((t, i) => ({ planned_date: date, recipe_id: null, servings: 1, meal_type: mealType, custom_title: t, custom_price: i === 0 ? price : null, planned_meal_id: meal.id, sort_order: i, workspace: currentWorkspace, })); const { data, error } = await supabase.from("meal_plan_entries").insert(rows).select(); if (error) throw error; return data; } export async function addCustomComponentToPlannedMeal(plannedMealId, title) { const { data: meal, error: mealError } = await supabase.from("planned_meals").select("planned_date, meal_type").eq("id", plannedMealId).single(); if (mealError) throw mealError; const { data: siblings, error: siblingsError } = await supabase.from("meal_plan_entries").select("sort_order").eq("planned_meal_id", plannedMealId); if (siblingsError) throw siblingsError; const nextSortOrder = siblings.length > 0 ? Math.max(...siblings.map((s) => s.sort_order ?? 0)) + 1 : 0; const { data, error } = await supabase.from("meal_plan_entries").insert({ planned_date: meal.planned_date, meal_type: meal.meal_type, recipe_id: null, servings: 1, custom_title: title, planned_meal_id: plannedMealId, sort_order: nextSortOrder, workspace: currentWorkspace, }).select().single(); if (error) throw error; return data; } export async function listRecentCustomMealTitles(limit = 12) { const { data, error } = await supabase.from("meal_plan_entries").select("custom_title, custom_price, planned_date").eq("workspace", currentWorkspace).is("recipe_id", null).not("custom_title", "is", null).order("planned_date", { ascending: false }); if (error) throw error; const byTitle = new Map(); for (const row of data || []) { const key = (row.custom_title || "").trim(); if (!key) continue; if (!byTitle.has(key)) { byTitle.set(key, { title: key, price: row.custom_price === null || row.custom_price === undefined ? null : Number(row.custom_price), count: 1 }); } else { byTitle.get(key).count += 1; } } return [...byTitle.values()].sort((a, b) => b.count - a.count).slice(0, limit); }
 /**
  * Fuegt einem bereits bestehenden geplanten Essen eine weitere Rezept-
  * Komponente hinzu (der "+ Gericht/Komponente hinzufügen"-Fall). Aus einem
@@ -883,55 +883,7 @@ export async function generateShoppingList(startDate, endDate) {
   // "subgroups" darunter und werden erst danach zusammengeführt.
   const byName = new Map(); // nameLower -> { name, subgroups: Map(subKey -> {quantity, unit, canonical}) }
 
-  for (const entry of entries) {
-    const recipe = recipesById.get(entry.recipeId);
-    if (!recipe) continue;
-    const base = Number(recipe.servings_base) || 1;
-    const ratio = entry.servings / base;
-
-    for (const ri of recipe.recipe_ingredients) {
-      const name = ri.ingredients?.name?.trim();
-      if (!name) continue;
-      const nameKey = name.toLowerCase();
-      const rawUnit = ri.units?.abbreviation || "";
-
-      if (!byName.has(nameKey)) byName.set(nameKey, { name, subgroups: new Map() });
-      const group = byName.get(nameKey);
-
-      if (ri.quantity === null) {
-        // z. B. "nach Geschmack" – ohne Menge, nur einmal je Einheit auflisten
-        const subKey = `text|${rawUnit}`;
-        if (!group.subgroups.has(subKey)) {
-          group.subgroups.set(subKey, { quantity: null, unit: rawUnit });
-        }
-        continue;
-      }
-
-      const scaled = Number(ri.quantity) * ratio;
-      const conversion = UNIT_CONVERSIONS[rawUnit];
-
-      if (conversion) {
-        const subKey = `unit|${conversion.canonical}`;
-        const amount = scaled * conversion.factor;
-        const existing = group.subgroups.get(subKey);
-        if (existing) {
-          existing.quantity += amount;
-        } else {
-          group.subgroups.set(subKey, { quantity: amount, unit: conversion.canonical, canonical: true });
-        }
-      } else {
-        const subKey = `unit|${rawUnit}`;
-        const existing = group.subgroups.get(subKey);
-        if (existing) {
-          existing.quantity += scaled;
-        } else {
-          group.subgroups.set(subKey, { quantity: scaled, unit: rawUnit });
-        }
-      }
-    }
-  }
-
-  const items = [];
+  for (const entry of entries) { const recipe = recipesById.get(entry.recipeId); if (!recipe) continue; const base = Number(recipe.servings_base) || 1; const ratio = entry.servings / base; for (const ri of recipe.recipe_ingredients) { const name = ri.ingredients?.name?.trim(); if (!name) continue; const nameKey = name.toLowerCase(); const rawUnit = ri.units?.abbreviation || ""; if (!byName.has(nameKey)) byName.set(nameKey, { name, subgroups: new Map() }); const group = byName.get(nameKey); if (ri.quantity === null) { const subKey = `text|${rawUnit}`; if (!group.subgroups.has(subKey)) { group.subgroups.set(subKey, { quantity: null, unit: rawUnit }); } continue; } const scaled = Number(ri.quantity) * ratio; const conversion = UNIT_CONVERSIONS[rawUnit]; if (conversion) { const subKey = `unit|${conversion.canonical}`; const amount = scaled * conversion.factor; const existing = group.subgroups.get(subKey); if (existing) { existing.quantity += amount; } else { group.subgroups.set(subKey, { quantity: amount, unit: conversion.canonical, canonical: true }); } } else { const subKey = `unit|${rawUnit}`; const existing = group.subgroups.get(subKey); if (existing) { existing.quantity += scaled; } else { group.subgroups.set(subKey, { quantity: scaled, unit: rawUnit }); } } } } for (const entry of entries) { if (entry.recipeId || !entry.isCustom) continue; const rawName = (entry.recipeTitle || "").trim(); if (!rawName) continue; const nameKey = rawName.toLowerCase(); if (!byName.has(nameKey)) byName.set(nameKey, { name: rawName, subgroups: new Map() }); const group = byName.get(nameKey); const subKey = "text|custom"; if (!group.subgroups.has(subKey)) group.subgroups.set(subKey, { quantity: null, unit: "" }); } const items = [];
   for (const { name, subgroups } of byName.values()) {
     const parts = [...subgroups.values()].map((sg) => {
       if (sg.quantity === null) return { quantity: null, unit: sg.unit || "" };
