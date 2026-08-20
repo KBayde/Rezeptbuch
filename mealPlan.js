@@ -5,7 +5,7 @@ addMealPlanEntryForDays,
 removeMealPlanEntry,
 updateMealPlanEntryServings,
 copyMealPlanWeek,
-addCustomMealPlanEntry, listRecentCustomMealTitles,
+addCustomMealPlanEntry, listRecentCustomMealTitles, addCustomComponentToPlannedMeal,
 generateShoppingList,
 suggestRecipesFromInventory,
 listMealCombinations,
@@ -245,8 +245,7 @@ canExtend && hasRecipeComponent
 : "";
 const addComponentHtml = canExtend
 ? `<select class="component-add-select" data-planned-meal-id="${group.plannedMealId}" data-meal-type="${mealTypeKey}">
-<option value="">+ Komponente…</option>
-${recipeOptionsHtml(mealTypeKey)}
+<option value="">+ Komponente…</option> <option value="__custom__">✏️ Anderes…</option> ${recipeOptionsHtml(mealTypeKey)}
 </select>`
 : "";
 return `
@@ -306,28 +305,7 @@ const value = select.value;
 if (!value) return;
 const date = select.dataset.date;
 const mealType = select.dataset.mealType;
-if (value === "__custom__") {
-const title = prompt("Was hast du gegessen (ohne Rezept)?");
-if (!title || !title.trim()) {
-select.value = "";
-return;
-}
-const priceInput = prompt("Kosten in € (optional, leer lassen zum Überspringen):", "");
-let price = null;
-if (priceInput !== null && priceInput.trim() !== "") {
-const parsed = Number(priceInput.trim().replace(",", "."));
-if (Number.isFinite(parsed) && parsed >= 0) price = parsed;
-}
-select.disabled = true;
-try {
-await addCustomMealPlanEntry(date, mealType, title.trim(), price); try { recentCustomMeals = await listRecentCustomMealTitles(); } catch {} await load();
-} catch (err) {
-alert("Konnte Eintrag nicht speichern: " + err.message);
-select.disabled = false;
-select.value = "";
-}
-return;
-}
+if (value === "__custom__") { const title = prompt("Wie soll dieses Essen heißen? (z. B. \"Brötchenfrühstück\" oder einfach \"Döner\")"); if (!title || !title.trim()) { select.value = ""; return; } const itemsInput = prompt("Weitere Posten dazu, durch Komma getrennt (optional) – z. B. \"5 Brötchen, Fleischsalat, Lachs, Krabbensalat\":", ""); const extraItems = itemsInput ? itemsInput.split(",").map((s) => s.trim()).filter(Boolean) : []; const priceInput = prompt("Kosten in € (optional, leer lassen zum Überspringen):", ""); let price = null; if (priceInput !== null && priceInput.trim() !== "") { const parsed = Number(priceInput.trim().replace(",", ".")); if (Number.isFinite(parsed) && parsed >= 0) price = parsed; } select.disabled = true; try { await addCustomMealPlanEntry(date, mealType, title.trim(), price, extraItems); try { recentCustomMeals = await listRecentCustomMealTitles(); } catch {} await load(); } catch (err) { alert("Konnte Eintrag nicht speichern: " + err.message); select.disabled = false; select.value = ""; } return; }
 if (value.startsWith("quick:")) { const idx = Number(value.slice("quick:".length)); const meal = recentCustomMeals[idx]; if (!meal) { select.value = ""; return; } select.disabled = true; try { await addCustomMealPlanEntry(date, mealType, meal.title, meal.price); await load(); } catch (err) { alert("Konnte Eintrag nicht speichern: " + err.message); select.disabled = false; select.value = ""; } return; } if (value.startsWith("combo:")) {
 const combinationId = value.slice("combo:".length);
 select.disabled = true;
@@ -357,37 +335,7 @@ select.disabled = false;
 });
 });
 
-planEl.querySelectorAll(".component-add-select").forEach((select) => {
-select.addEventListener("change", async () => {
-const recipeId = select.value;
-if (!recipeId) return;
-const plannedMealId = select.dataset.plannedMealId;
-const group = currentEntries.filter((e) => e.plannedMealId === plannedMealId);
-const needsTitle = group.length === 1 && !group[0]?.mealTitle;
-let title = null;
-if (needsTitle) {
-title = prompt(
-"Wie soll dieses Essen heißen (z. B. \"Raclette-Abend\")? Ab zwei Komponenten ist ein Titel Pflicht."
-);
-if (!title || !title.trim()) {
-select.value = "";
-return;
-}
-}
-const recipe = allRecipes.find((r) => r.id === recipeId);
-const servings = recipe ? Math.max(1, Math.round(recipe.servingsBase)) : 2;
-select.disabled = true;
-try {
-await addComponentToPlannedMeal(plannedMealId, recipeId, servings);
-if (title) await renamePlannedMeal(plannedMealId, title.trim());
-await load();
-} catch (err) {
-alert("Konnte Komponente nicht hinzufügen: " + err.message);
-select.disabled = false;
-select.value = "";
-}
-});
-});
+planEl.querySelectorAll(".component-add-select").forEach((select) => { select.addEventListener("change", async () => { const value = select.value; if (!value) return; const plannedMealId = select.dataset.plannedMealId; const group = currentEntries.filter((e) => e.plannedMealId === plannedMealId); const needsTitle = group.length === 1 && !group[0]?.mealTitle; let title = null; if (needsTitle) { title = prompt( "Wie soll dieses Essen heißen (z. B. \"Raclette-Abend\")? Ab zwei Komponenten ist ein Titel Pflicht." ); if (!title || !title.trim()) { select.value = ""; return; } } select.disabled = true; try { if (value === "__custom__") { const itemTitle = prompt("Welcher Posten (ohne Rezept)?"); if (!itemTitle || !itemTitle.trim()) { select.disabled = false; select.value = ""; return; } await addCustomComponentToPlannedMeal(plannedMealId, itemTitle.trim()); } else { const recipe = allRecipes.find((r) => r.id === value); const servings = recipe ? Math.max(1, Math.round(recipe.servingsBase)) : 2; await addComponentToPlannedMeal(plannedMealId, value, servings); } if (title) await renamePlannedMeal(plannedMealId, title.trim()); await load(); } catch (err) { alert("Konnte Komponente nicht hinzufügen: " + err.message); select.disabled = false; select.value = ""; } }); });
 
 planEl.querySelectorAll(".meal-group-rename").forEach((btn) => {
 btn.addEventListener("click", async () => {
