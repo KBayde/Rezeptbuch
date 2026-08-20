@@ -725,6 +725,38 @@ export async function copyMealPlanWeek(sourceStartDate, sourceEndDate, targetSta
     return copiedCount;
 }
 
+/**
+ * Loescht alle geplanten Mahlzeiten (inkl. der zugehoerigen planned_meals)
+ * im Datumsbereich [startDate, endDate] der aktuellen Arbeitsumgebung - der
+ * "Woche leeren"-Knopf im Wochenplan. Referenzierte Rezepte selbst werden
+ * dabei nicht angeruehrt, nur die Verknuepfungen im Plan.
+ */
+export async function clearMealPlanWeek(startDate, endDate) {
+  const { data: rows, error: fetchError } = await supabase
+    .from("meal_plan_entries")
+    .select("id, planned_meal_id")
+    .eq("workspace", currentWorkspace)
+    .gte("planned_date", startDate)
+    .lte("planned_date", endDate);
+  if (fetchError) throw fetchError;
+  if (!rows || rows.length === 0) return 0;
+
+  const { error: deleteError } = await supabase
+    .from("meal_plan_entries")
+    .delete()
+    .eq("workspace", currentWorkspace)
+    .gte("planned_date", startDate)
+    .lte("planned_date", endDate);
+  if (deleteError) throw deleteError;
+
+  const mealIds = [...new Set(rows.map((r) => r.planned_meal_id).filter(Boolean))];
+  if (mealIds.length > 0) {
+    await supabase.from("planned_meals").delete().in("id", mealIds);
+  }
+
+  return rows.length;
+}
+
 // --------------------------- Einkaufsliste ---------------------------
 
 export async function listShoppingListItems() {
@@ -806,6 +838,17 @@ export async function clearCheckedShoppingListItems() {
 
     const { error } = await supabase.from("shopping_list_items").delete().eq("checked", true).eq("workspace", currentWorkspace);
     if (error) throw error;
+}
+
+/**
+ * Loescht ALLE Posten der aktuellen Einkaufsliste (abgehakt oder nicht) -
+ * anders als clearCheckedShoppingListItems werden dabei KEINE Preise in die
+ * Kostenhistorie/den Wochenbericht uebernommen, da dies ein reiner
+ * "Liste zuruecksetzen"-Knopf ist und kein abgeschlossener Einkauf.
+ */
+export async function clearShoppingList() {
+  const { error } = await supabase.from("shopping_list_items").delete().eq("workspace", currentWorkspace);
+  if (error) throw error;
 }
 
 // Einheiten, die sich sinnvoll ineinander umrechnen lassen, damit z. B.
