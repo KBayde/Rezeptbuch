@@ -282,6 +282,10 @@ textarea { resize: vertical; font-family: var(--font-body); }
   flex-wrap: wrap;
 }
 
+.toolbar--wrap {
+  flex-wrap: wrap;
+}
+
 .search-input {
   flex: 1;
   min-width: 200px;
