@@ -5,7 +5,7 @@ addMealPlanEntryForDays,
 removeMealPlanEntry,
 updateMealPlanEntryServings,
 copyMealPlanWeek,
-addCustomMealPlanEntry,
+addCustomMealPlanEntry, listRecentCustomMealTitles,
 generateShoppingList,
 suggestRecipesFromInventory,
 listMealCombinations,
@@ -33,7 +33,7 @@ const today = new Date();
 let currentWeekStart = getWeekStart(today);
 let armTwoDays = false;
 let currentEntries = [];
-let allCombinations = [];
+let allCombinations = []; let recentCustomMeals = [];
 let viewMode =
 localStorage.getItem(VIEW_STORAGE_KEY) ||
 (window.matchMedia("(max-width: 720px)").matches ? "list" : "grid");
@@ -120,10 +120,7 @@ return;
 }
 
 try {
-allCombinations = await listMealCombinations();
-} catch {
-allCombinations = [];
-}
+allCombinations = await listMealCombinations(); } catch { allCombinations = []; } try { recentCustomMeals = await listRecentCustomMealTitles(); } catch { recentCustomMeals = []; }
 
 function setArmTwoDays(value) {
 armTwoDays = value;
@@ -150,7 +147,7 @@ viewGridBtn.addEventListener("click", () => setViewMode("grid"));
 viewListBtn.addEventListener("click", () => setViewMode("list"));
 syncViewToggleButtons();
 
-function recipeOptionsHtml(mealTypeKey) { const matching = []; const others = []; for (const r of allRecipes) { if (r.mealTypes && r.mealTypes.includes(mealTypeKey)) matching.push(r); else others.push(r); } const sortByTitle = (a, b) => a.title.localeCompare(b.title, "de"); matching.sort(sortByTitle); others.sort(sortByTitle); const optHtml = (list) => list.map((r) => `<option value="${r.id}">${escapeHtml(r.title)}</option>`).join(""); if (matching.length === 0) { return `<optgroup label="Alle Rezepte">${optHtml(others)}</optgroup>`; } const mealLabel = MEAL_TYPES.find((mt) => mt.key === mealTypeKey)?.label || mealTypeKey; return `<optgroup label="✓ Passend für ${mealLabel}">${optHtml(matching)}</optgroup><optgroup label="Weitere Rezepte">${optHtml(others)}</optgroup>`; }
+function recipeOptionsHtml(mealTypeKey) { const matching = []; const others = []; for (const r of allRecipes) { if (r.mealTypes && r.mealTypes.includes(mealTypeKey)) matching.push(r); else others.push(r); } const sortByTitle = (a, b) => a.title.localeCompare(b.title, "de"); matching.sort(sortByTitle); others.sort(sortByTitle); const optHtml = (list) => list.map((r) => `<option value="${r.id}">${escapeHtml(r.title)}</option>`).join(""); if (matching.length === 0) { return `<optgroup label="Alle Rezepte">${optHtml(others)}</optgroup>`; } const mealLabel = MEAL_TYPES.find((mt) => mt.key === mealTypeKey)?.label || mealTypeKey; return `<optgroup label="✓ Passend für ${mealLabel}">${optHtml(matching)}</optgroup><optgroup label="Weitere Rezepte">${optHtml(others)}</optgroup>`; } function quickCustomOptionsHtml() { if (!recentCustomMeals || recentCustomMeals.length === 0) return ""; const opts = recentCustomMeals.map((m, i) => `<option value="quick:${i}">🥪 ${escapeHtml(m.title)}${m.price !== null && m.price !== undefined ? ` (${formatPrice(m.price)} €)` : ""}</option>`).join(""); return `<optgroup label="Ohne Rezept (zuletzt verwendet)">${opts}</optgroup>`; }
 
 // Optgroup mit gespeicherten Essens-Kombinationen ("Unser Raclette" usw.) fuer
 // den Haupt-Rezept-Select jedes Zeitfensters - Ein-Klick-Uebernahme einer
@@ -269,96 +266,7 @@ return `
 <div class="meal-entries">${groupsHtml}</div>
 <select class="meal-add-select meal-add-select--${mealTypeKey}" data-date="${iso}" data-meal-type="${mealTypeKey}">
 <option value="">+ Rezept…</option>
-<option value="__custom__">✏️ Anderes (ohne Rezept)…</option>
-${recipeOptionsHtml(mealTypeKey)}
-${comboOptionsHtml()}
-</select>
-</div>
-`;
-}
-
-  function buildTimetable(entries) {
-const byKey = {};
-for (const e of entries) {
-const key = `${e.date}|${e.mealType}`;
-(byKey[key] ||= []).push(e);
-}
-
-const todayIso = formatDateISO(today);
-const dayIsos = Array.from({ length: 7 }, (_, i) => formatDateISO(addDays(currentWeekStart, i)));
-
-let html = `<div class="timetable-corner"></div>`;
-dayIsos.forEach((iso, i) => {
-const date = addDays(currentWeekStart, i);
-const isToday = iso === todayIso;
-html += `
-<div class="timetable-daylabel ${isToday ? "timetable-daylabel--today" : ""}">
-<span class="day-name">${WEEKDAY_LABELS_DE[i]}</span>
-<span class="day-date text-muted">${formatDateDisplay(date)}</span>
-</div>
-`;
-});
-
-for (const mt of MEAL_TYPES) {
-html += `
-<div class="timetable-mealrow-label timetable-mealrow-label--${mt.key}">
-<span class="meal-icon">${mt.icon}</span>
-<span class="meal-label">${mt.label}</span>
-</div>
-`;
-for (const iso of dayIsos) {
-const cellEntries = byKey[`${iso}|${mt.key}`] || [];
-html += cellHtml(iso, mt.key, cellEntries);
-}
-}
-
-planEl.innerHTML = html;
-planEl.style.setProperty("--meal-row-count", MEAL_TYPES.length);
-wireCells();
-}
-
-  function agendaEntryHtml(entry) {
-const isCustom = !entry.recipeId;
-const priceLabel =
-isCustom && entry.customPrice !== null && entry.customPrice !== undefined
-? `<span class="meal-entry-price">${formatPrice(entry.customPrice)} €</span>`
-: "";
-const titleHtml = isCustom
-? `<span class="agenda-entry-title">${escapeHtml(entry.recipeTitle)}</span>`
-: `<a href="#/rezepte/${entry.recipeId}" class="agenda-entry-title">${escapeHtml(entry.recipeTitle)}</a>`;
-const metaHtml = isCustom
-? priceLabel
-: `<input
-type="number" min="1" step="1" class="meal-entry-servings"
-data-entry-id="${entry.id}" value="${entry.servings}"
-/>`;
-return `
-<div class="agenda-entry${isCustom ? " agenda-entry--custom" : ""}" data-entry-id="${entry.id}">
-${entryThumbHtml(entry)}
-${titleHtml}
-<div class="agenda-entry-meta">
-${metaHtml}
-<button class="meal-entry-remove" data-entry-id="${entry.id}" title="Entfernen" type="button">×</button>
-</div>
-</div>
-`;
-}
-
-function agendaMealRowHtml(iso, mt, entries) {
-const groups = groupEntriesByMeal(entries);
-const groupsHtml = groups.map((g) => mealGroupHtml(g, mt.key, agendaEntryHtml)).join("");
-return `
-<div class="agenda-meal-row" data-date="${iso}" data-meal-type="${mt.key}">
-<div class="agenda-meal-label">
-<span class="meal-icon">${mt.icon}</span>
-<span class="meal-label">${mt.label}</span>
-</div>
-<div class="agenda-meal-content">
-${groupsHtml || `<p class="agenda-meal-empty text-muted text-small">Nichts geplant</p>`}
-<select class="meal-add-select meal-add-select--${mt.key}" data-date="${iso}" data-meal-type="${mt.key}">
-<option value="">+ Rezept…</option>
-<option value="__custom__">✏️ Anderes (ohne Rezept)…</option>
-${recipeOptionsHtml(mt.key)}
+<option value="__custom__">✏️ Anderes (ohne Rezept)…</option> ${quickCustomOptionsHtml()} ${recipeOptionsHtml(mt.key)}
 ${comboOptionsHtml()}
 </select>
 </div>
@@ -428,8 +336,7 @@ if (Number.isFinite(parsed) && parsed >= 0) price = parsed;
 }
 select.disabled = true;
 try {
-await addCustomMealPlanEntry(date, mealType, title.trim(), price);
-await load();
+await addCustomMealPlanEntry(date, mealType, title.trim(), price); try { recentCustomMeals = await listRecentCustomMealTitles(); } catch {} await load();
 } catch (err) {
 alert("Konnte Eintrag nicht speichern: " + err.message);
 select.disabled = false;
@@ -437,7 +344,7 @@ select.value = "";
 }
 return;
 }
-if (value.startsWith("combo:")) {
+if (value.startsWith("quick:")) { const idx = Number(value.slice("quick:".length)); const meal = recentCustomMeals[idx]; if (!meal) { select.value = ""; return; } select.disabled = true; try { await addCustomMealPlanEntry(date, mealType, meal.title, meal.price); await load(); } catch (err) { alert("Konnte Eintrag nicht speichern: " + err.message); select.disabled = false; select.value = ""; } return; } if (value.startsWith("combo:")) {
 const combinationId = value.slice("combo:".length);
 select.disabled = true;
 try {
