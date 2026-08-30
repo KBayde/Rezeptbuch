@@ -14,6 +14,7 @@ addComponentToPlannedMeal,
 renamePlannedMeal,
 saveMealAsCombination,
 applyCombinationToSlot,
+getSetting,
 } from "./db.js";
 import {
 escapeHtml,
@@ -34,7 +35,7 @@ const today = new Date();
 let currentWeekStart = getWeekStart(today);
 let armTwoDays = false;
 let currentEntries = [];
-let allCombinations = []; let recentCustomMeals = [];
+let allCombinations = []; let recentCustomMeals = []; let dailyCalorieTarget = null;
 let viewMode =
 localStorage.getItem(VIEW_STORAGE_KEY) ||
 (window.matchMedia("(max-width: 720px)").matches ? "list" : "grid");
@@ -123,7 +124,7 @@ return;
 }
 
 try {
-allCombinations = await listMealCombinations(); } catch { allCombinations = []; } try { recentCustomMeals = await listRecentCustomMealTitles(); } catch { recentCustomMeals = []; }
+allCombinations = await listMealCombinations(); } catch { allCombinations = []; } try { recentCustomMeals = await listRecentCustomMealTitles(); } catch { recentCustomMeals = []; } try { dailyCalorieTarget = await getSetting("daily_calorie_target"); } catch { dailyCalorieTarget = null; }
 
 function setArmTwoDays(value) {
 armTwoDays = value;
@@ -132,6 +133,33 @@ twoDayHint.hidden = !value;
 }
 
 twoDayToggle.addEventListener("click", () => setArmTwoDays(!armTwoDays));
+
+// Kalorien-Summe eines Tages aus den bereits geladenen currentEntries.
+// hasUnknown = true, wenn mind. ein Eintrag (z. B. "Anderes ohne Rezept" oder
+// ein Rezept ohne Kalorien-Schätzung) nicht mitgezaehlt werden konnte.
+function caloriesForDate(iso) {
+  const dayEntries = currentEntries.filter((e) => e.date === iso);
+  let sum = 0;
+  let hasUnknown = false;
+  for (const e of dayEntries) {
+    if (e.caloriesPerServing === null || e.caloriesPerServing === undefined) {
+      hasUnknown = true;
+      continue;
+    }
+    sum += e.caloriesPerServing * e.servings;
+  }
+  return { sum, hasUnknown, hasAny: dayEntries.length > 0 };
+}
+
+function dayCaloriesHtml(iso) {
+  const { sum, hasUnknown, hasAny } = caloriesForDate(iso);
+  if (!hasAny || sum <= 0) return "";
+  const rounded = Math.round(sum);
+  const over = dailyCalorieTarget && sum > dailyCalorieTarget;
+  const label = `${hasUnknown ? "≈ " : ""}${rounded} kcal`;
+  const title = hasUnknown ? "Enthält Einträge ohne Kalorienangabe (nicht mitgerechnet)" : "";
+  return `<span class="day-calories${over ? " day-calories--over" : ""}" title="${title}">🔥 ${label}${over ? " ⚠️" : ""}</span>`;
+}
 
 function syncViewToggleButtons() {
 viewGridBtn.classList.toggle("view-toggle-btn--active", viewMode === "grid");
@@ -260,7 +288,7 @@ ${addComponentHtml}
 `;
 }
 
-function cellHtml(iso, mealTypeKey, entries) { const groups = groupEntriesByMeal(entries); const groupsHtml = groups.map((g) => mealGroupHtml(g, mealTypeKey, entryChipHtml)).join(""); return `<div class="timetable-cell" data-date="${iso}" data-meal-type="${mealTypeKey}"><div class="meal-entries">${groupsHtml}</div><select class="meal-add-select meal-add-select--${mealTypeKey}" data-date="${iso}" data-meal-type="${mealTypeKey}"><option value="">+ Rezept…</option><option value="__custom__">✏️ Anderes (ohne Rezept)…</option> ${quickCustomOptionsHtml()} ${recipeOptionsHtml(mealTypeKey)} ${comboOptionsHtml()}</select></div>`; } function buildTimetable(entries) { const byKey = {}; for (const e of entries) { const key = `${e.date}|${e.mealType}`; (byKey[key] ||= []).push(e); } const todayIso = formatDateISO(today); const dayIsos = Array.from({ length: 7 }, (_, i) => formatDateISO(addDays(currentWeekStart, i))); let html = `<div class="timetable-corner"></div>`; dayIsos.forEach((iso, i) => { const date = addDays(currentWeekStart, i); const isToday = iso === todayIso; html += `<div class="timetable-daylabel ${isToday ? "timetable-daylabel--today" : ""}"><span class="day-name">${WEEKDAY_LABELS_DE[i]}</span><span class="day-date text-muted">${formatDateDisplay(date)}</span></div>`; }); for (const mt of MEAL_TYPES) { html += `<div class="timetable-mealrow-label timetable-mealrow-label--${mt.key}"><span class="meal-icon">${mt.icon}</span><span class="meal-label">${mt.label}</span></div>`; for (const iso of dayIsos) { const cellEntries = byKey[`${iso}|${mt.key}`] || []; html += cellHtml(iso, mt.key, cellEntries); } } planEl.innerHTML = html; planEl.style.setProperty("--meal-row-count", MEAL_TYPES.length); wireCells(); } function agendaEntryHtml(entry) { const isCustom = !entry.recipeId; const priceLabel = isCustom && entry.customPrice !== null && entry.customPrice !== undefined ? `<span class="meal-entry-price">${formatPrice(entry.customPrice)} €</span>` : ""; const titleHtml = isCustom ? `<span class="agenda-entry-title">${escapeHtml(entry.recipeTitle)}</span>` : `<a href="#/rezepte/${entry.recipeId}" class="agenda-entry-title">${escapeHtml(entry.recipeTitle)}</a>`; const metaHtml = isCustom ? priceLabel : `<input type="number" min="1" step="1" class="meal-entry-servings" data-entry-id="${entry.id}" value="${entry.servings}" />`; return `<div class="agenda-entry${isCustom ? " agenda-entry--custom" : ""}" data-entry-id="${entry.id}">${entryThumbHtml(entry)}${titleHtml}<div class="agenda-entry-meta">${metaHtml}<button class="meal-entry-remove" data-entry-id="${entry.id}" title="Entfernen" type="button">×</button></div></div>`; } function agendaMealRowHtml(iso, mt, entries) { const groups = groupEntriesByMeal(entries); const groupsHtml = groups.map((g) => mealGroupHtml(g, mt.key, agendaEntryHtml)).join(""); return `<div class="agenda-meal-row" data-date="${iso}" data-meal-type="${mt.key}"><div class="agenda-meal-label"><span class="meal-icon">${mt.icon}</span><span class="meal-label">${mt.label}</span></div><div class="agenda-meal-content">${groupsHtml || `<p class="agenda-meal-empty text-muted text-small">Nichts geplant</p>`}<select class="meal-add-select meal-add-select--${mt.key}" data-date="${iso}" data-meal-type="${mt.key}"><option value="">+ Rezept…</option><option value="__custom__">✏️ Anderes (ohne Rezept)…</option> ${quickCustomOptionsHtml()} ${recipeOptionsHtml(mt.key)} ${comboOptionsHtml()}</select></div></div>`; } function buildAgenda(entries) {
+function cellHtml(iso, mealTypeKey, entries) { const groups = groupEntriesByMeal(entries); const groupsHtml = groups.map((g) => mealGroupHtml(g, mealTypeKey, entryChipHtml)).join(""); return `<div class="timetable-cell" data-date="${iso}" data-meal-type="${mealTypeKey}"><div class="meal-entries">${groupsHtml}</div><select class="meal-add-select meal-add-select--${mealTypeKey}" data-date="${iso}" data-meal-type="${mealTypeKey}"><option value="">+ Rezept…</option><option value="__custom__">✏️ Anderes (ohne Rezept)…</option> ${quickCustomOptionsHtml()} ${recipeOptionsHtml(mealTypeKey)} ${comboOptionsHtml()}</select></div>`; } function buildTimetable(entries) { const byKey = {}; for (const e of entries) { const key = `${e.date}|${e.mealType}`; (byKey[key] ||= []).push(e); } const todayIso = formatDateISO(today); const dayIsos = Array.from({ length: 7 }, (_, i) => formatDateISO(addDays(currentWeekStart, i))); let html = `<div class="timetable-corner"></div>`; dayIsos.forEach((iso, i) => { const date = addDays(currentWeekStart, i); const isToday = iso === todayIso; html += `<div class="timetable-daylabel ${isToday ? "timetable-daylabel--today" : ""}"><span class="day-name">${WEEKDAY_LABELS_DE[i]}</span><span class="day-date text-muted">${formatDateDisplay(date)}</span>${dayCaloriesHtml(iso)}</div>`; }); for (const mt of MEAL_TYPES) { html += `<div class="timetable-mealrow-label timetable-mealrow-label--${mt.key}"><span class="meal-icon">${mt.icon}</span><span class="meal-label">${mt.label}</span></div>`; for (const iso of dayIsos) { const cellEntries = byKey[`${iso}|${mt.key}`] || []; html += cellHtml(iso, mt.key, cellEntries); } } planEl.innerHTML = html; planEl.style.setProperty("--meal-row-count", MEAL_TYPES.length); wireCells(); } function agendaEntryHtml(entry) { const isCustom = !entry.recipeId; const priceLabel = isCustom && entry.customPrice !== null && entry.customPrice !== undefined ? `<span class="meal-entry-price">${formatPrice(entry.customPrice)} €</span>` : ""; const titleHtml = isCustom ? `<span class="agenda-entry-title">${escapeHtml(entry.recipeTitle)}</span>` : `<a href="#/rezepte/${entry.recipeId}" class="agenda-entry-title">${escapeHtml(entry.recipeTitle)}</a>`; const metaHtml = isCustom ? priceLabel : `<input type="number" min="1" step="1" class="meal-entry-servings" data-entry-id="${entry.id}" value="${entry.servings}" />`; return `<div class="agenda-entry${isCustom ? " agenda-entry--custom" : ""}" data-entry-id="${entry.id}">${entryThumbHtml(entry)}${titleHtml}<div class="agenda-entry-meta">${metaHtml}<button class="meal-entry-remove" data-entry-id="${entry.id}" title="Entfernen" type="button">×</button></div></div>`; } function agendaMealRowHtml(iso, mt, entries) { const groups = groupEntriesByMeal(entries); const groupsHtml = groups.map((g) => mealGroupHtml(g, mt.key, agendaEntryHtml)).join(""); return `<div class="agenda-meal-row" data-date="${iso}" data-meal-type="${mt.key}"><div class="agenda-meal-label"><span class="meal-icon">${mt.icon}</span><span class="meal-label">${mt.label}</span></div><div class="agenda-meal-content">${groupsHtml || `<p class="agenda-meal-empty text-muted text-small">Nichts geplant</p>`}<select class="meal-add-select meal-add-select--${mt.key}" data-date="${iso}" data-meal-type="${mt.key}"><option value="">+ Rezept…</option><option value="__custom__">✏️ Anderes (ohne Rezept)…</option> ${quickCustomOptionsHtml()} ${recipeOptionsHtml(mt.key)} ${comboOptionsHtml()}</select></div></div>`; } function buildAgenda(entries) {
 const byKey = {};
 for (const e of entries) {
 const key = `${e.date}|${e.mealType}`;
@@ -278,7 +306,7 @@ html += `
 <div class="agenda-day ${isToday ? "agenda-day--today" : ""}">
 <div class="agenda-day-header">
 <span class="agenda-day-name">${WEEKDAY_LABELS_DE[i]}</span>
-<span class="agenda-day-date text-muted">${formatDateDisplay(date)}</span>
+<span class="agenda-day-date text-muted">${formatDateDisplay(date)}</span>${dayCaloriesHtml(iso)}
 </div>
 ${MEAL_TYPES.map((mt) => agendaMealRowHtml(iso, mt, byKey[`${iso}|${mt.key}`] || [])).join("")}
 </div>
