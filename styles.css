@@ -2131,3 +2131,18 @@ order: 1;
 order: 2;
 }
 }
+
+
+.expiry-estimate-btn {
+  padding: 0.15rem 0.4rem;
+  font-size: 0.9rem;
+  line-height: 1;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.expiry-estimate-btn:hover {
+  border-color: var(--color-primary);
+}
