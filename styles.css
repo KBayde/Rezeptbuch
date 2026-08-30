@@ -2018,3 +2018,29 @@ body.sandbox-mode .topbar {
     font-size: 0.72rem;
   }
 }
+
+
+/* ------------------------------ Wochenplan: Kalorien-Badge ------------------------------ */
+
+.day-calories {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  background: var(--color-surface-alt);
+  color: var(--color-text-muted);
+  border-radius: 999px;
+  padding: 0.15rem 0.5rem;
+  font-size: 0.68rem;
+  font-weight: 600;
+  margin-top: 0.15rem;
+}
+.day-calories--over {
+  background: var(--color-danger-tint);
+  color: var(--color-danger);
+}
+
+.calories-field-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
