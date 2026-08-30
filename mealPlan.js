@@ -15,6 +15,7 @@ renamePlannedMeal,
 saveMealAsCombination,
 applyCombinationToSlot,
 getSetting,
+markMealPlanEntryCooked,
 } from "./db.js";
 import {
 escapeHtml,
@@ -45,6 +46,7 @@ container.innerHTML = `
       <div>
         <h1>Wochenplan</h1>
         <p class="text-muted" id="week-range-label"></p>
+<p class="text-small text-muted" id="cooked-status" aria-live="polite"></p>
       </div>
       <div class="detail-actions">
         <button id="prev-week-btn" class="btn btn-secondary btn-small" type="button">← Vorige</button>
@@ -98,6 +100,7 @@ container.innerHTML = `
   const planWrap = container.querySelector("#plan-wrap");
 const planEl = container.querySelector("#plan-el");
 const rangeLabel = container.querySelector("#week-range-label");
+const cookedStatus = container.querySelector("#cooked-status");
 const shoppingBtn = container.querySelector("#make-shopping-list-btn");
 const twoDayToggle = container.querySelector("#two-day-toggle");
 const twoDayHint = container.querySelector("#two-day-hint");
@@ -214,13 +217,17 @@ const metaHtml = isCustom
 type="number" min="1" step="1" class="meal-entry-servings"
 data-entry-id="${entry.id}" value="${entry.servings}"
 />`;
+  const cookedBtnHtml = isCustom
+? ""
+: `<button class="meal-entry-cooked${entry.cookedAt ? " meal-entry-cooked--active" : ""}" data-entry-id="${entry.id}" title="${entry.cookedAt ? "Als gekocht markiert – erneut klicken zum Zurücksetzen" : "Als gekocht markieren"}" type="button">${entry.cookedAt ? "✅" : "☐"}</button>`;
 return `
-<div class="meal-entry${isCustom ? " meal-entry--custom" : ""}" data-entry-id="${entry.id}">
+<div class="meal-entry${isCustom ? " meal-entry--custom" : ""}${entry.cookedAt ? " meal-entry--cooked" : ""}" data-entry-id="${entry.id}">
 ${entryThumbHtml(entry)}
 <div class="meal-entry-body">
 ${titleHtml}
 <div class="meal-entry-meta">
 ${metaHtml}
+${cookedBtnHtml}
 <button class="meal-entry-remove" data-entry-id="${entry.id}" title="Entfernen" type="button">×</button>
 </div>
 </div>
@@ -288,7 +295,7 @@ ${addComponentHtml}
 `;
 }
 
-function cellHtml(iso, mealTypeKey, entries) { const groups = groupEntriesByMeal(entries); const groupsHtml = groups.map((g) => mealGroupHtml(g, mealTypeKey, entryChipHtml)).join(""); return `<div class="timetable-cell" data-date="${iso}" data-meal-type="${mealTypeKey}"><div class="meal-entries">${groupsHtml}</div><select class="meal-add-select meal-add-select--${mealTypeKey}" data-date="${iso}" data-meal-type="${mealTypeKey}"><option value="">+ Rezept…</option><option value="__custom__">✏️ Anderes (ohne Rezept)…</option> ${quickCustomOptionsHtml()} ${recipeOptionsHtml(mealTypeKey)} ${comboOptionsHtml()}</select></div>`; } function buildTimetable(entries) { const byKey = {}; for (const e of entries) { const key = `${e.date}|${e.mealType}`; (byKey[key] ||= []).push(e); } const todayIso = formatDateISO(today); const dayIsos = Array.from({ length: 7 }, (_, i) => formatDateISO(addDays(currentWeekStart, i))); let html = `<div class="timetable-corner"></div>`; dayIsos.forEach((iso, i) => { const date = addDays(currentWeekStart, i); const isToday = iso === todayIso; html += `<div class="timetable-daylabel ${isToday ? "timetable-daylabel--today" : ""}"><span class="day-name">${WEEKDAY_LABELS_DE[i]}</span><span class="day-date text-muted">${formatDateDisplay(date)}</span>${dayCaloriesHtml(iso)}</div>`; }); for (const mt of MEAL_TYPES) { html += `<div class="timetable-mealrow-label timetable-mealrow-label--${mt.key}"><span class="meal-icon">${mt.icon}</span><span class="meal-label">${mt.label}</span></div>`; for (const iso of dayIsos) { const cellEntries = byKey[`${iso}|${mt.key}`] || []; html += cellHtml(iso, mt.key, cellEntries); } } planEl.innerHTML = html; planEl.style.setProperty("--meal-row-count", MEAL_TYPES.length); wireCells(); } function agendaEntryHtml(entry) { const isCustom = !entry.recipeId; const priceLabel = isCustom && entry.customPrice !== null && entry.customPrice !== undefined ? `<span class="meal-entry-price">${formatPrice(entry.customPrice)} €</span>` : ""; const titleHtml = isCustom ? `<span class="agenda-entry-title">${escapeHtml(entry.recipeTitle)}</span>` : `<a href="#/rezepte/${entry.recipeId}" class="agenda-entry-title">${escapeHtml(entry.recipeTitle)}</a>`; const metaHtml = isCustom ? priceLabel : `<input type="number" min="1" step="1" class="meal-entry-servings" data-entry-id="${entry.id}" value="${entry.servings}" />`; return `<div class="agenda-entry${isCustom ? " agenda-entry--custom" : ""}" data-entry-id="${entry.id}">${entryThumbHtml(entry)}${titleHtml}<div class="agenda-entry-meta">${metaHtml}<button class="meal-entry-remove" data-entry-id="${entry.id}" title="Entfernen" type="button">×</button></div></div>`; } function agendaMealRowHtml(iso, mt, entries) { const groups = groupEntriesByMeal(entries); const groupsHtml = groups.map((g) => mealGroupHtml(g, mt.key, agendaEntryHtml)).join(""); return `<div class="agenda-meal-row" data-date="${iso}" data-meal-type="${mt.key}"><div class="agenda-meal-label"><span class="meal-icon">${mt.icon}</span><span class="meal-label">${mt.label}</span></div><div class="agenda-meal-content">${groupsHtml || `<p class="agenda-meal-empty text-muted text-small">Nichts geplant</p>`}<select class="meal-add-select meal-add-select--${mt.key}" data-date="${iso}" data-meal-type="${mt.key}"><option value="">+ Rezept…</option><option value="__custom__">✏️ Anderes (ohne Rezept)…</option> ${quickCustomOptionsHtml()} ${recipeOptionsHtml(mt.key)} ${comboOptionsHtml()}</select></div></div>`; } function buildAgenda(entries) {
+function cellHtml(iso, mealTypeKey, entries) { const groups = groupEntriesByMeal(entries); const groupsHtml = groups.map((g) => mealGroupHtml(g, mealTypeKey, entryChipHtml)).join(""); return `<div class="timetable-cell" data-date="${iso}" data-meal-type="${mealTypeKey}"><div class="meal-entries">${groupsHtml}</div><select class="meal-add-select meal-add-select--${mealTypeKey}" data-date="${iso}" data-meal-type="${mealTypeKey}"><option value="">+ Rezept…</option><option value="__custom__">✏️ Anderes (ohne Rezept)…</option> ${quickCustomOptionsHtml()} ${recipeOptionsHtml(mealTypeKey)} ${comboOptionsHtml()}</select></div>`; } function buildTimetable(entries) { const byKey = {}; for (const e of entries) { const key = `${e.date}|${e.mealType}`; (byKey[key] ||= []).push(e); } const todayIso = formatDateISO(today); const dayIsos = Array.from({ length: 7 }, (_, i) => formatDateISO(addDays(currentWeekStart, i))); let html = `<div class="timetable-corner"></div>`; dayIsos.forEach((iso, i) => { const date = addDays(currentWeekStart, i); const isToday = iso === todayIso; html += `<div class="timetable-daylabel ${isToday ? "timetable-daylabel--today" : ""}"><span class="day-name">${WEEKDAY_LABELS_DE[i]}</span><span class="day-date text-muted">${formatDateDisplay(date)}</span>${dayCaloriesHtml(iso)}</div>`; }); for (const mt of MEAL_TYPES) { html += `<div class="timetable-mealrow-label timetable-mealrow-label--${mt.key}"><span class="meal-icon">${mt.icon}</span><span class="meal-label">${mt.label}</span></div>`; for (const iso of dayIsos) { const cellEntries = byKey[`${iso}|${mt.key}`] || []; html += cellHtml(iso, mt.key, cellEntries); } } planEl.innerHTML = html; planEl.style.setProperty("--meal-row-count", MEAL_TYPES.length); wireCells(); } function agendaEntryHtml(entry) { const isCustom = !entry.recipeId; const priceLabel = isCustom && entry.customPrice !== null && entry.customPrice !== undefined ? `<span class="meal-entry-price">${formatPrice(entry.customPrice)} €</span>` : ""; const titleHtml = isCustom ? `<span class="agenda-entry-title">${escapeHtml(entry.recipeTitle)}</span>` : `<a href="#/rezepte/${entry.recipeId}" class="agenda-entry-title">${escapeHtml(entry.recipeTitle)}</a>`; const metaHtml = isCustom ? priceLabel : `<input type="number" min="1" step="1" class="meal-entry-servings" data-entry-id="${entry.id}" value="${entry.servings}" />`; const cookedBtnHtml = isCustom ? "" : `<button class="meal-entry-cooked${entry.cookedAt ? " meal-entry-cooked--active" : ""}" data-entry-id="${entry.id}" title="${entry.cookedAt ? "Als gekocht markiert – erneut klicken zum Zurücksetzen" : "Als gekocht markieren"}" type="button">${entry.cookedAt ? "✅" : "☐"}</button>`; return `<div class="agenda-entry${isCustom ? " agenda-entry--custom" : ""}${entry.cookedAt ? " agenda-entry--cooked" : ""}" data-entry-id="${entry.id}">${entryThumbHtml(entry)}${titleHtml}<div class="agenda-entry-meta">${metaHtml}${cookedBtnHtml}<button class="meal-entry-remove" data-entry-id="${entry.id}" title="Entfernen" type="button">×</button></div></div>`; } function agendaMealRowHtml(iso, mt, entries) { const groups = groupEntriesByMeal(entries); const groupsHtml = groups.map((g) => mealGroupHtml(g, mt.key, agendaEntryHtml)).join(""); return `<div class="agenda-meal-row" data-date="${iso}" data-meal-type="${mt.key}"><div class="agenda-meal-label"><span class="meal-icon">${mt.icon}</span><span class="meal-label">${mt.label}</span></div><div class="agenda-meal-content">${groupsHtml || `<p class="agenda-meal-empty text-muted text-small">Nichts geplant</p>`}<select class="meal-add-select meal-add-select--${mt.key}" data-date="${iso}" data-meal-type="${mt.key}"><option value="">+ Rezept…</option><option value="__custom__">✏️ Anderes (ohne Rezept)…</option> ${quickCustomOptionsHtml()} ${recipeOptionsHtml(mt.key)} ${comboOptionsHtml()}</select></div></div>`; } function buildAgenda(entries) {
 const byKey = {};
 for (const e of entries) {
 const key = `${e.date}|${e.mealType}`;
@@ -419,6 +426,25 @@ await removeMealPlanEntry(btn.dataset.entryId);
 await load();
 } catch (err) {
 alert("Konnte nicht entfernen: " + err.message);
+btn.disabled = false;
+}
+});
+});
+
+planEl.querySelectorAll(".meal-entry-cooked").forEach((btn) => {
+btn.addEventListener("click", async () => {
+btn.disabled = true;
+try {
+const result = await markMealPlanEntryCooked(btn.dataset.entryId);
+if (result.bonusPoints > 0) {
+cookedStatus.textContent = `+${result.bonusPoints} 🦫 Restlos verwertet, bevor's schlecht wurde!`;
+setTimeout(() => {
+cookedStatus.textContent = "";
+}, 4000);
+}
+await load();
+} catch (err) {
+alert("Konnte nicht speichern: " + err.message);
 btn.disabled = false;
 }
 });
