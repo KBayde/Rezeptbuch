@@ -10,6 +10,7 @@ import { renderPhotoImport } from "./photoImport.js";
 import { renderYoutubeImport } from "./youtubeImport.js";
 import { renderLinkImport } from "./linkImport.js";
 import { renderInventory } from "./inventory.js";
+import { renderInventoryPhotoImport } from "./inventoryPhotoImport.js";
 import { renderHouseholdCosts } from "./costs.js";
 import { renderReceiptImport } from "./receiptImport.js";
 import { renderSettings } from "./settings.js";
@@ -102,6 +103,10 @@ function registerRoutes() {
     const container = document.getElementById("app");
     await renderInventory(container);
   });
+route("/vorrat/foto-import", async () => {
+const container = document.getElementById("app");
+await renderInventoryPhotoImport(container);
+});
   route("/haushaltskosten", async () => {
     const container = document.getElementById("app");
     await renderHouseholdCosts(container);
