@@ -1,4 +1,4 @@
-import {
+äimport {
   listUnits,
   listIngredients,
   listTags,
@@ -120,6 +120,16 @@ export async function renderRecipeForm(container, { id } = {}) {
             <span>Portionen (Basis) *</span>
             <input type="number" name="servingsBase" min="1" step="1" required
               value="${recipe?.servingsBase ?? 4}" />
+          </label>
+        </div>
+
+        <div class="field-row">
+          <label class="field">
+            <span>Kalorien pro Portion (optional)</span>
+            <div class="calories-field-row">
+              <input type="number" name="caloriesPerServing" min="0" step="1" placeholder="z. B. 550" value="${recipe?.caloriesPerServing ?? ""}" />
+              <button type="button" id="estimate-calories-btn" class="btn-ghost btn-tiny" title="Kalorien per KI schätzen">🤖</button>
+            </div>
           </label>
         </div>
 
@@ -342,7 +352,43 @@ export async function renderRecipeForm(container, { id } = {}) {
   renderIngredients();
   renderSteps();
 
-  const form = container.querySelector("#recipe-form");
+  const caloriesInput = container.querySelector('input[name="caloriesPerServing"]');
+const estimateCaloriesBtn = container.querySelector("#estimate-calories-btn");
+if (estimateCaloriesBtn) {
+  estimateCaloriesBtn.addEventListener("click", async () => {
+    syncIngredientsFromDom();
+    const titleValue = container.querySelector('input[name="title"]').value.trim();
+    const servingsBaseValue = Number(container.querySelector('input[name="servingsBase"]').value) || 1;
+    const ingredientsForApi = state.ingredients
+      .filter((ing) => ing.name.trim())
+      .map((ing) => ({ name: ing.name.trim(), quantity: ing.quantity, unit: ing.unitAbbreviation, note: ing.note }));
+    if (ingredientsForApi.length === 0) {
+      alert("Bitte zuerst mindestens eine Zutat eingeben.");
+      return;
+    }
+    estimateCaloriesBtn.disabled = true;
+    const originalLabel = estimateCaloriesBtn.textContent;
+    estimateCaloriesBtn.textContent = "…";
+    try {
+      const res = await fetch("/api/estimate-calories", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ title: titleValue, servingsBase: servingsBaseValue, ingredients: ingredientsForApi }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Kalorien konnten nicht geschätzt werden.");
+      if (typeof data.calories !== "number") throw new Error("Keine Kalorienangabe erhalten.");
+      caloriesInput.value = Math.round(data.calories);
+    } catch (err) {
+      alert("KI-Schätzung fehlgeschlagen: " + err.message);
+    } finally {
+      estimateCaloriesBtn.disabled = false;
+      estimateCaloriesBtn.textContent = originalLabel;
+    }
+  });
+}
+
+const form = container.querySelector("#recipe-form");
   const errorEl = container.querySelector("#form-error");
 
   form.addEventListener("submit", async (e) => {
@@ -379,6 +425,7 @@ export async function renderRecipeForm(container, { id } = {}) {
       steps: cleanSteps,
       tags: state.tags,
       mealTypes: state.mealTypes,
+caloriesPerServing: formData.get("caloriesPerServing") ? Number(formData.get("caloriesPerServing")) : null,
     };
 
     if (!payload.title) {
