@@ -1,6 +1,6 @@
 import { navigate } from "./router.js";
 import { addInventoryItemsBulk } from "./db.js";
-import { escapeHtml, unitOptionsHtml } from "./utils.js";
+import { escapeHtml, unitOptionsHtml, estimateExpiryDate } from "./utils.js";
 
 const MAX_IMAGES = 3;
 
@@ -137,11 +137,11 @@ throw new Error(data.error || "Lebensmittel konnten nicht erkannt werden.");
 }
 
 photoItems = (data.items || []).map((it) => ({
-name: it.name,
-quantity: it.quantity,
-unit: it.unit || "Stück",
-expiryDate: it.expiryDate || "",
-checked: true,
+  name: it.name,
+  quantity: it.quantity,
+  unit: it.unit || "Stück",
+  expiryDate: it.expiryDate || estimateExpiryDate(it.name),
+  checked: true,
 }));
 uploadCard.hidden = true;
 reviewCard.hidden = false;
@@ -166,6 +166,7 @@ itemsList.innerHTML = photoItems
 <input type="number" step="any" min="0" class="inv-photo-item-qty" data-index="${i}" value="${item.quantity ?? ""}" placeholder="Menge" />
 <select class="inv-photo-item-unit" data-index="${i}">${unitOptionsHtml(item.unit || "Stück")}</select>
 <input type="date" class="inv-photo-item-expiry" data-index="${i}" value="${item.expiryDate || ""}" required />
+<button type="button" class="btn-ghost expiry-estimate-btn" data-index="${i}" title="MHD schätzen">🤖</button>
 </li>
 `
 )
@@ -196,12 +197,22 @@ photoItems[Number(unitEl.dataset.index)].unit = unitEl.value.trim();
 });
 });
 itemsList.querySelectorAll(".inv-photo-item-expiry").forEach((expEl) => {
-expEl.addEventListener("input", () => {
-const idx = Number(expEl.dataset.index);
-photoItems[idx].expiryDate = expEl.value;
-expEl.closest(".inventory-photo-item").classList.toggle("inventory-photo-item--missing-expiry", !expEl.value);
-});
-});
+    expEl.addEventListener("input", () => {
+      const idx = Number(expEl.dataset.index);
+      photoItems[idx].expiryDate = expEl.value;
+      expEl.closest(".inventory-photo-item").classList.toggle("inventory-photo-item--missing-expiry", !expEl.value);
+    });
+  });
+  itemsList.querySelectorAll(".expiry-estimate-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const idx = Number(btn.dataset.index);
+      const item = photoItems[idx];
+      const expEl = itemsList.querySelector(`.inv-photo-item-expiry[data-index="${idx}"]`);
+      item.expiryDate = estimateExpiryDate(item.name);
+      expEl.value = item.expiryDate;
+      expEl.closest(".inventory-photo-item").classList.remove("inventory-photo-item--missing-expiry");
+    });
+  });
 }
 
 addBtn.addEventListener("click", async () => {
