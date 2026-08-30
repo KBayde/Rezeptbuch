@@ -3,6 +3,8 @@ import {
   addInventoryItem,
   updateInventoryItem,
   deleteInventoryItem,
+  markInventoryItemUsed,
+  markInventoryItemWasted,
 } from "./db.js";
 import { escapeHtml, formatQuantity, formatDateDisplayFull, daysUntil, unitOptionsHtml } from "./utils.js";
 
@@ -26,6 +28,7 @@ export async function renderInventory(container) {
       <div>
         <h1>Vorrat</h1>
         <p class="text-muted" id="inventory-count"></p>
+        <p class="text-small text-muted" id="inventory-score-status" aria-live="polite"></p>
       </div>
     </div>
 
@@ -47,6 +50,7 @@ export async function renderInventory(container) {
   const emptyState = container.querySelector("#inventory-empty");
   const countEl = container.querySelector("#inventory-count");
   const soonWrap = container.querySelector("#inventory-soon-wrap");
+  const scoreStatus = container.querySelector("#inventory-score-status");
   const form = container.querySelector("#add-inventory-form");
 
   function itemRowHtml(item) {
@@ -69,7 +73,8 @@ export async function renderInventory(container) {
             type="date" class="inventory-expiry-input"
             data-item-id="${item.id}" value="${item.expiryDate || ""}"
           />
-          <button class="row-remove inventory-item-remove" data-item-id="${item.id}" title="Aufgebraucht / entfernen" type="button">×</button>
+          <button class="row-action row-action--used inventory-item-used" data-item-id="${item.id}" title="Aufgebraucht" type="button">✅</button>
+          <button class="row-action row-action--wasted inventory-item-wasted" data-item-id="${item.id}" title="Weggeworfen" type="button">🗑️</button>
         </div>
       </li>
     `;
@@ -105,14 +110,35 @@ export async function renderInventory(container) {
         }
       });
     });
-    list.querySelectorAll(".inventory-item-remove").forEach((btn) => {
+    list.querySelectorAll(".inventory-item-used").forEach((btn) => {
       btn.addEventListener("click", async () => {
         btn.disabled = true;
         try {
-          await deleteInventoryItem(btn.dataset.itemId);
+          const points = await markInventoryItemUsed(btn.dataset.itemId);
+          scoreStatus.textContent = `+${points} 🦫 Aufgebraucht, bevor's schlecht wurde!`;
+          setTimeout(() => {
+            scoreStatus.textContent = "";
+          }, 4000);
           await load();
         } catch (err) {
-          alert("Konnte nicht entfernen: " + err.message);
+          alert("Konnte nicht speichern: " + err.message);
+          btn.disabled = false;
+        }
+      });
+    });
+    list.querySelectorAll(".inventory-item-wasted").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        if (!confirm("Wirklich als weggeworfen markieren?")) return;
+        btn.disabled = true;
+        try {
+          const points = await markInventoryItemWasted(btn.dataset.itemId);
+          scoreStatus.textContent = `${points} 🦫 Autsch, das hat sich der Biber weggezwickert.`;
+          setTimeout(() => {
+            scoreStatus.textContent = "";
+          }, 4000);
+          await load();
+        } catch (err) {
+          alert("Konnte nicht speichern: " + err.message);
           btn.disabled = false;
         }
       });
