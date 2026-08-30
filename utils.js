@@ -142,6 +142,47 @@ export function daysUntil(dateStr) {
   return Math.round((target - today) / 86400000);
 }
 
+// Grobe Schaetzung der Haltbarkeit in Tagen ab heute, fuer Lebensmittel ohne
+// aufgedrucktes MHD (z. B. lose Zitrusfruechte) oder wenn man das MHD gerade
+// nicht ablesen kann/mag. Bewusst grob (keine Lebensmitteldatenbank) - dient
+// nur als Startwert zum Ausfuellen des Pflichtfelds, der Mensch kann und soll
+// ihn jederzeit anpassen. "override" greift vor der (groeberen) Kategorie.
+const SHELF_LIFE_OVERRIDES = [
+  { days: 3, keywords: ["salat", "spinat", "rucola", "kräuter", "petersilie", "basilikum", "koriander", "schnittlauch", "minze", "dill", "pilz", "champignon", "erdbeere", "himbeere", "beere"] },
+  { days: 7, keywords: ["hähnchen", "huhn", "pute", "hack", "fisch", "lachs", "garnele", "milch", "joghurt", "quark", "sahne", "brot", "brötchen"] },
+  { days: 21, keywords: ["zitrone", "limette", "apfel", "orange", "möhre", "karotte", "kohl", "paprika", "gurke"] },
+  { days: 60, keywords: ["zwiebel", "knoblauch", "kartoffel", "kürbis"] },
+];
+
+const SHELF_LIFE_BY_CATEGORY = {
+  meat: 5,
+  dairy: 10,
+  produce: 10,
+  bakery: 5,
+  frozen: 120,
+  beverages: 180,
+  spices: 365,
+  pantry: 270,
+  other: 14,
+};
+
+/** Grobe Haltbarkeits-Schätzung in Tagen ab heute für einen Lebensmittelnamen. */
+export function estimateShelfLifeDays(name) {
+  const n = (name || "").toLowerCase();
+  const override = SHELF_LIFE_OVERRIDES.find((o) => o.keywords.some((kw) => n.includes(kw)));
+  if (override) return override.days;
+  const cat = categorizeIngredient(name);
+  return SHELF_LIFE_BY_CATEGORY[cat.key] ?? 14;
+}
+
+/** Schätzt ein MHD (YYYY-MM-DD) ab heute für einen Lebensmittelnamen - siehe estimateShelfLifeDays. */
+export function estimateExpiryDate(name) {
+  const days = estimateShelfLifeDays(name);
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  return formatDateISO(d);
+}
+
 // --------------------------- Preise (Einkaufsliste / Kosten-Tracker) ---------------------------
 
 /** Formatiert einen Preis mit Komma und zwei Nachkommastellen, z. B. "3,50". */
