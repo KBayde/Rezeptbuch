@@ -16,6 +16,33 @@ let currentWorkspace = localStorage.getItem(WORKSPACE_STORAGE_KEY) === "sandbox"
 export function getWorkspace() { return currentWorkspace; }
 export function setWorkspace(value) { currentWorkspace = value === "sandbox" ? "sandbox" : "real"; localStorage.setItem(WORKSPACE_STORAGE_KEY, currentWorkspace); }
 
+// --------------------------- Einstellungen (generisches Key/Value) ---------------------------
+//
+// Generischer Settings-Speicher pro Workspace, damit neue Einstellungen
+// (z. B. spaeter "Portionen"-Praeferenzen) nur eine neue Zeile/Aufruf
+// brauchen statt einer neuen Spalte/Migration.
+
+export async function getSetting(key, defaultValue = null) {
+  const { data, error } = await supabase
+    .from("app_settings")
+    .select("value")
+    .eq("workspace", currentWorkspace)
+    .eq("key", key)
+    .maybeSingle();
+  if (error) throw error;
+  return data ? data.value : defaultValue;
+}
+
+export async function setSetting(key, value) {
+  const { error } = await supabase
+    .from("app_settings")
+    .upsert(
+      { workspace: currentWorkspace, key, value, updated_at: new Date().toISOString() },
+      { onConflict: "workspace,key" }
+    );
+  if (error) throw error;
+}
+
 // --------------------------- Auth ---------------------------
 
 export async function getSession() {
@@ -172,7 +199,7 @@ export async function removeCoverImage(recipeId) {
 
 const RECIPE_SELECT = `
   id, title, source_type, source_text, source_url, prep_time_minutes,
-  servings_base, notes, meal_types, created_at, updated_at,
+  servings_base, notes, meal_types, calories_per_serving, created_at, updated_at,
   recipe_steps ( id, step_number, instruction ),
   recipe_ingredients ( id, quantity, note, sort_order,
     ingredients ( id, name ),
@@ -203,6 +230,7 @@ function normalizeRecipe(row) {
     servingsBase: Number(row.servings_base),
     notes: row.notes,
     mealTypes: row.meal_types || [],
+caloriesPerServing: row.calories_per_serving === null || row.calories_per_serving === undefined ? null : Number(row.calories_per_serving),
     images,
     imageUrl: cover?.url ?? null,
     createdAt: row.created_at,
@@ -264,6 +292,7 @@ export async function createRecipe(form) {
       servings_base: form.servingsBase,
       notes: form.notes || null,
       meal_types: form.mealTypes || [],
+calories_per_serving: form.caloriesPerServing ?? null,
     })
     .select()
     .single();
@@ -285,6 +314,7 @@ export async function updateRecipe(id, form) {
       servings_base: form.servingsBase,
       notes: form.notes || null,
       meal_types: form.mealTypes || [],
+calories_per_serving: form.caloriesPerServing ?? null,
     })
     .eq("id", id);
   if (error) throw error;
@@ -358,7 +388,7 @@ export async function deleteRecipe(id) {
 const MEAL_PLAN_SELECT = `
   id, planned_date, servings, meal_type, created_at, custom_title, custom_price,
   planned_meal_id, sort_order,
-  recipes ( id, title, servings_base, prep_time_minutes,
+  recipes ( id, title, servings_base, prep_time_minutes, calories_per_serving,
     recipe_images ( storage_path, image_type )
   ),
   planned_meals ( id, title, combination_id )
@@ -376,6 +406,7 @@ function normalizeMealPlanEntry(row) {
           recipeTitle: hasRecipe ? row.recipes.title : row.custom_title || "(gelöschtes Rezept)",
           recipeServingsBase: row.recipes ? Number(row.recipes.servings_base) : null,
           prepTimeMinutes: row.recipes?.prep_time_minutes ?? null,
+caloriesPerServing: row.recipes?.calories_per_serving === null || row.recipes?.calories_per_serving === undefined ? null : Number(row.recipes.calories_per_serving),
           imageUrl: cover ? getRecipeImageUrl(cover.storage_path) : null,
           isCustom: !hasRecipe && !!row.custom_title,
           customPrice: row.custom_price === null || row.custom_price === undefined ? null : Number(row.custom_price),
