@@ -6,7 +6,7 @@ import {
   markInventoryItemUsed,
   markInventoryItemWasted,
 } from "./db.js";
-import { escapeHtml, formatQuantity, formatDateDisplayFull, daysUntil, unitOptionsHtml } from "./utils.js";
+import { escapeHtml, formatQuantity, formatDateDisplayFull, daysUntil, unitOptionsHtml, estimateExpiryDate } from "./utils.js";
 
 /** Liefert Anzeigetext + CSS-Modifier für die MHD-Badge eines Inventar-Eintrags. */
 function expiryBadge(expiryDate) {
@@ -37,7 +37,10 @@ export async function renderInventory(container) {
       <input type="text" id="inv-name" class="search-input" placeholder="Name (z. B. Rucola)" required />
       <input type="number" id="inv-quantity" step="any" min="0" placeholder="Menge" />
               <select id="inv-unit" required>${unitOptionsHtml("Stück")}</select>
-      <input type="date" id="inv-expiry" title="Mindesthaltbarkeitsdatum (Pflicht)" required />
+      <div class="calories-field-row">
+        <input type="date" id="inv-expiry" title="Mindesthaltbarkeitsdatum (Pflicht)" required />
+        <button type="button" id="inv-expiry-estimate" class="btn-ghost expiry-estimate-btn" title="MHD schätzen (z. B. wenn keins aufgedruckt ist)">🤖</button>
+      </div>
       <button type="submit" class="btn btn-primary">+ Hinzufügen</button>
     </form>
 
@@ -193,6 +196,11 @@ export async function renderInventory(container) {
     list.innerHTML = items.map(itemRowHtml).join("");
     wireItems();
   }
+
+  container.querySelector("#inv-expiry-estimate").addEventListener("click", () => {
+    const name = form.querySelector("#inv-name").value.trim();
+    form.querySelector("#inv-expiry").value = estimateExpiryDate(name);
+  });
 
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
