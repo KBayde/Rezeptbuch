@@ -5,7 +5,7 @@
 // einfach: neue Funktionen hier ergänzen, Views bleiben unangetastet.
 // ============================================================================
 import { supabase } from "./supabaseClient.js";
-import { formatQuantity, getWeekStart, formatDateISO } from "./utils.js";
+import { formatQuantity, getWeekStart, formatDateISO, daysUntil } from "./utils.js";
 
 // Name des Supabase Storage Buckets für Rezeptbilder (muss im Dashboard
 // als "Public bucket" angelegt sein, siehe DEPLOYMENT.md).
@@ -386,7 +386,7 @@ export async function deleteRecipe(id) {
 // verweisen) - die Rezepte selbst bleiben eigenstaendig und werden nie dupliziert.
 
 const MEAL_PLAN_SELECT = `
-  id, planned_date, servings, meal_type, created_at, custom_title, custom_price,
+  id, planned_date, servings, meal_type, created_at, custom_title, custom_price, cooked_at,
   planned_meal_id, sort_order,
   recipes ( id, title, servings_base, prep_time_minutes, calories_per_serving,
     recipe_images ( storage_path, image_type )
@@ -413,6 +413,7 @@ caloriesPerServing: row.recipes?.calories_per_serving === null || row.recipes?.c
           plannedMealId: row.planned_meal_id ?? null,
           mealTitle: row.planned_meals?.title ?? null,
           sortOrder: row.sort_order ?? 0,
+          cookedAt: row.cooked_at ?? null,
     };
 }
 /** Lädt alle geplanten Mahlzeiten im Datumsbereich [startDate, endDate] (je "YYYY-MM-DD"). */
@@ -1285,11 +1286,11 @@ export async function getPriceTrendForIngredient(ingredientName) {
     };
 }
 
-  function normalizeIngredientName(name) {
+  export function normalizeIngredientName(name) {
       return (name || "").trim().toLowerCase();
   }
 
-function ingredientNamesMatch(a, b) {
+export function ingredientNamesMatch(a, b) {
     if (!a || !b) return false;
     if (a === b) return true;
     return a.length >= 3 && b.length >= 3 && (a.includes(b) || b.includes(a));
@@ -1337,4 +1338,161 @@ export async function suggestRecipesFromInventory(limit = 6) {
 
     suggestions.sort((a, b) => b.score - a.score);
     return suggestions.slice(0, limit);
+}
+
+
+// --------------------------- Waste-Score (Gamification, Phase A) ---------------------------
+//
+// Event-sourced: waste_score_events wird nur angehaengt, nie veraendert oder
+// geloescht. Alles Abgeleitete (Summen, Level, Stimmung, Badges) wird in
+// einer spaeteren Phase aus diesem Log berechnet, nicht hier schon gepflegt.
+
+async function logWasteScoreEvent({
+  eventType,
+  points,
+  inventoryItemId = null,
+  recipeId = null,
+  mealPlanEntryId = null,
+  estimatedValue = null,
+  note = null,
+}) {
+  const { error } = await supabase.from("waste_score_events").insert({
+    workspace: currentWorkspace,
+    event_type: eventType,
+    points,
+    inventory_item_id: inventoryItemId,
+    recipe_id: recipeId,
+    meal_plan_entry_id: mealPlanEntryId,
+    estimated_value: estimatedValue,
+    note,
+  });
+  if (error) throw error;
+}
+
+/**
+ * Markiert einen Vorratsposten als aufgebraucht (statt kommentarlos geloescht).
+ * Punkte gestaffelt danach, wie knapp vor Ablauf des MHD noch verwendet wurde.
+ * Gibt die vergebenen Punkte zurueck (fuer eine kurze UI-Rueckmeldung).
+ */
+export async function markInventoryItemUsed(id) {
+  const { data: item, error: findError } = await supabase
+    .from("inventory_items")
+    .select("name, expiry_date")
+    .eq("id", id)
+    .maybeSingle();
+  if (findError) throw findError;
+
+  let points = 5;
+  if (item?.expiry_date) {
+    const days = daysUntil(item.expiry_date);
+    if (days === null) points = 5;
+    else if (days < 0) points = 3;
+    else if (days <= 1) points = 20;
+    else if (days <= 3) points = 15;
+    else if (days <= 7) points = 10;
+    else points = 5;
+  }
+
+  await deleteInventoryItem(id);
+  await logWasteScoreEvent({
+    eventType: "used_before_expiry",
+    points,
+    note: item?.name || null,
+  });
+  return points;
+}
+
+/**
+ * Markiert einen Vorratsposten als weggeworfen. Punktabzug gestaffelt nach
+ * geschaetztem Wert (falls Preishistorie fuer den Namen existiert), sonst
+ * ein moderater Pauschalabzug. Bewusst gedeckelt, damit es nie hart bestrafend
+ * wirkt, nur ein spielerischer Denkzettel.
+ */
+export async function markInventoryItemWasted(id) {
+  const { data: item, error: findError } = await supabase
+    .from("inventory_items")
+    .select("name")
+    .eq("id", id)
+    .maybeSingle();
+  if (findError) throw findError;
+
+  let points = -8;
+  let estimatedValue = null;
+  if (item?.name) {
+    try {
+      const avg = await getAveragePrice(item.name);
+      if (avg !== null) {
+        estimatedValue = avg;
+        points = -Math.min(25, Math.max(5, Math.round(avg * 4)));
+      }
+    } catch {
+      // Preis-Schaetzung ist optional - Score-Vergabe darf daran nicht scheitern.
+    }
+  }
+
+  await deleteInventoryItem(id);
+  await logWasteScoreEvent({
+    eventType: "thrown_away",
+    points,
+    estimatedValue,
+    note: item?.name || null,
+  });
+  return points;
+}
+
+/**
+ * Schaltet den "gekocht"-Status einer Rezept-Komponente im Wochenplan um.
+ * Beim erstmaligen Markieren wird geprueft, ob das Rezept mindestens eine
+ * aktuell bald ablaufende Vorrats-Zutat verwendet - wenn ja, gibt es einen
+ * Bonus (staerkstes positives Signal: aktiv Reste verwertet statt nur
+ * "zufaellig" aufgebraucht). Beim Zuruecksetzen werden KEINE Punkte wieder
+ * abgezogen (Score-Log bleibt rein additiv).
+ */
+export async function markMealPlanEntryCooked(id) {
+  const { data: entry, error: findError } = await supabase
+    .from("meal_plan_entries")
+    .select("id, recipe_id, cooked_at")
+    .eq("id", id)
+    .single();
+  if (findError) throw findError;
+
+  if (entry.cooked_at) {
+    const { error } = await supabase.from("meal_plan_entries").update({ cooked_at: null }).eq("id", id);
+    if (error) throw error;
+    return { cooked: false, bonusPoints: 0 };
+  }
+
+  const { error: updateError } = await supabase
+    .from("meal_plan_entries")
+    .update({ cooked_at: new Date().toISOString() })
+    .eq("id", id);
+  if (updateError) throw updateError;
+
+  let bonusPoints = 0;
+  if (entry.recipe_id) {
+    try {
+      const [recipe, expiring] = await Promise.all([getRecipe(entry.recipe_id), getExpiringInventoryItems(4)]);
+      const expiringNames = expiring.map((i) => normalizeIngredientName(i.name));
+      let matchCount = 0;
+      for (const ing of recipe.ingredients) {
+        const ingName = normalizeIngredientName(ing.ingredientName);
+        if (expiringNames.some((n) => ingredientNamesMatch(n, ingName))) matchCount++;
+      }
+      if (matchCount > 0) {
+        bonusPoints = 15 * Math.min(3, matchCount);
+        await logWasteScoreEvent({
+          eventType: "used_via_recipe",
+          points: bonusPoints,
+          recipeId: entry.recipe_id,
+          mealPlanEntryId: id,
+          note: recipe.title,
+        });
+      }
+    } catch {
+      // Score-Bonus ist ein Nice-to-have - darf das eigentliche Markieren
+      // nicht verhindern (z.B. wenn das Rezept inzwischen geloescht wurde).
+    }
+  }
+
+  return { cooked: true, bonusPoints };
 }
