@@ -6,6 +6,7 @@ import {
     clearCheckedShoppingListItems,
 clearShoppingList,
     addInventoryItem,
+    addInventoryItemsBulk,
     updateShoppingListItemPrice,
     getAveragePrice,
 } from "./db.js";
@@ -58,8 +59,19 @@ export async function renderShoppingList(container) {
                                                                                                                                                                   
                                                                                                                                                                   <div id="shopping-items" class="shopping-list"></div>
                                                                                                               <p id="shopping-empty" class="empty-state" hidden>Deine Einkaufsliste ist leer.</p>
-                                                                                                              
-                                                                                                                  <div class="week-footer">
+
+<div class="card stack-md" id="bulk-inventory-review" hidden>
+<h2>In den Vorrat übernehmen</h2>
+<p class="text-muted">Bitte für jeden Posten Menge/Einheit prüfen und ein Mindesthaltbarkeitsdatum eintragen (Pflicht).</p>
+<ul id="bulk-inventory-items" class="receipt-items inventory-photo-items"></ul>
+<div class="week-footer">
+<button type="button" id="bulk-inventory-confirm-btn" class="btn btn-primary">Übernehmen</button>
+<button type="button" id="bulk-inventory-cancel-btn" class="btn btn-ghost">Abbrechen</button>
+</div>
+<p id="bulk-inventory-status" class="text-muted" hidden></p>
+</div>
+
+<div class="week-footer">
                                                                                                                         <a href="#/haushaltskosten" class="btn btn-secondary">💶 Kosten-Tracker</a>
                                                                                                                         <a href="#/einkaufsliste/kassenbon-scan" class="btn btn-secondary">📷 Kassenbon scannen</a>
                                                                                                                               <button id="move-checked-to-inventory-btn" class="btn btn-secondary" type="button">→ Erledigte in Vorrat übernehmen</button>
@@ -161,7 +173,7 @@ input.addEventListener("blur", async () => {
                                                                                                                                                                                                                                                                                                                             <form class="inventory-quick-add" data-item-id="${item.id}" hidden>
                                                                                                                                                                                                                                                                                                                                       <input type="number" step="any" min="0" class="qa-quantity" placeholder="Menge" value="${prefillQty}" />
                                                                                                     <select class="qa-unit">${unitOptionsHtml(prefillUnit || "Stück")}</select>
-                                                                                                                                                                                                                                                                                                                                                          <input type="date" class="qa-expiry" title="Mindesthaltbarkeitsdatum (optional)" />
+                                                                                                                                                                                                                                                                                                                                                          <input type="date" class="qa-expiry" title="Mindesthaltbarkeitsdatum (Pflicht)" required />
                                                                                                                                                                                                                                                                                                                                                                     <button type="submit" class="btn btn-primary btn-small">Übernehmen</button>
                                                                                                                                                                                                                                                                                                                                                                               <button type="button" class="btn btn-ghost btn-small qa-cancel">Abbrechen</button>
                                                                                                                                                                                                                                                                                                                                                                                       </form>
@@ -304,8 +316,12 @@ ${spontaneousItems.map(itemHtml).join("")}
                           if (!sourceItem) return;
 
                                                 const quantityRaw = qaForm.querySelector(".qa-quantity").value;
-                          const unit = qaForm.querySelector(".").value.trim();
+                          const unit = qaForm.querySelector(".qa-unit").value.trim();
                           const expiryDate = qaForm.querySelector(".qa-expiry").value;
+if (!expiryDate) {
+alert("Bitte ein Mindesthaltbarkeitsdatum eintragen – MHD ist beim Übernehmen in den Vorrat Pflicht.");
+return;
+}
                           const submitBtn = qaForm.querySelector("button[type=submit]");
                           submitBtn.disabled = true;
                           try {
@@ -313,7 +329,7 @@ ${spontaneousItems.map(itemHtml).join("")}
                                                     name: sourceItem.name,
                                                     quantity: quantityRaw === "" ? null : Number(quantityRaw),
                                                     unit: unit || null,
-                                                    expiryDate: expiryDate || null,
+                                                    expiryDate,
                                                     source: "shopping_list",
                                       });
                                       qaForm.hidden = true;
@@ -397,27 +413,95 @@ clearAllBtn.disabled = items.length === 0;
   }
 });
 
-moveCheckedBtn.addEventListener("click", async () => {
-        const checkedItems = currentItems.filter((i) => i.checked);
-        if (!checkedItems.length) return;
-        moveCheckedBtn.disabled = true;
-        try {
-                for (const item of checkedItems) {
-                          await addInventoryItem({
-                                      name: item.name,
-                                      quantity: item.quantity,
-                                      unit: item.unit || "Stück",
-                                      expiryDate: null,
-                                      source: "shopping_list",
-                          });
-                }
-                await clearCheckedShoppingListItems();
-                await load();
-        } catch (err) {
-                alert("Konnte nicht in den Vorrat übernehmen: " + err.message);
-                moveCheckedBtn.disabled = false;
-        }
-  });
+let bulkTransferItems = [];
+const bulkReviewCard = container.querySelector("#bulk-inventory-review");
+const bulkItemsList = container.querySelector("#bulk-inventory-items");
+const bulkConfirmBtn = container.querySelector("#bulk-inventory-confirm-btn");
+const bulkCancelBtn = container.querySelector("#bulk-inventory-cancel-btn");
+const bulkStatusEl = container.querySelector("#bulk-inventory-status");
+
+function renderBulkReviewItems() {
+bulkItemsList.innerHTML = bulkTransferItems
+.map(
+(item, i) => `
+<li class="receipt-item inventory-photo-item ${!item.expiryDate ? "inventory-photo-item--missing-expiry" : ""}" data-index="${i}">
+<span class="receipt-item-name">${escapeHtml(item.name)}</span>
+<input type="number" step="any" min="0" class="inv-photo-item-qty" data-index="${i}" value="${item.quantity ?? ""}" placeholder="Menge" />
+<select class="inv-photo-item-unit" data-index="${i}">${unitOptionsHtml(item.unit || "Stück")}</select>
+<input type="date" class="inv-photo-item-expiry" data-index="${i}" value="${item.expiryDate || ""}" required />
+</li>
+`
+)
+.join("");
+bulkItemsList.querySelectorAll(".inv-photo-item-qty").forEach((qtyEl) => {
+qtyEl.addEventListener("input", () => {
+const v = qtyEl.value.trim();
+bulkTransferItems[Number(qtyEl.dataset.index)].quantity = v === "" ? null : Number(v);
+});
+});
+bulkItemsList.querySelectorAll(".inv-photo-item-unit").forEach((unitEl) => {
+unitEl.addEventListener("change", () => {
+bulkTransferItems[Number(unitEl.dataset.index)].unit = unitEl.value.trim();
+});
+});
+bulkItemsList.querySelectorAll(".inv-photo-item-expiry").forEach((expEl) => {
+expEl.addEventListener("input", () => {
+const idx = Number(expEl.dataset.index);
+bulkTransferItems[idx].expiryDate = expEl.value;
+expEl.closest(".inventory-photo-item").classList.toggle("inventory-photo-item--missing-expiry", !expEl.value);
+});
+});
+}
+
+moveCheckedBtn.addEventListener("click", () => {
+const checkedItems = currentItems.filter((i) => i.checked);
+if (!checkedItems.length) return;
+bulkTransferItems = checkedItems.map((item) => ({
+name: item.name,
+quantity: item.quantity,
+unit: item.unit || "Stück",
+expiryDate: "",
+}));
+bulkStatusEl.hidden = true;
+bulkReviewCard.hidden = false;
+renderBulkReviewItems();
+bulkReviewCard.scrollIntoView({ behavior: "smooth", block: "start" });
+});
+
+bulkCancelBtn.addEventListener("click", () => {
+bulkReviewCard.hidden = true;
+bulkTransferItems = [];
+});
+
+bulkConfirmBtn.addEventListener("click", async () => {
+const missingExpiry = bulkTransferItems.find((it) => !it.expiryDate);
+if (missingExpiry) {
+alert(`Bitte für "${missingExpiry.name}" ein Mindesthaltbarkeitsdatum eintragen – MHD ist Pflicht.`);
+return;
+}
+bulkConfirmBtn.disabled = true;
+bulkStatusEl.hidden = false;
+bulkStatusEl.textContent = "Wird übernommen…";
+try {
+await addInventoryItemsBulk(
+bulkTransferItems.map((it) => ({
+name: it.name,
+quantity: it.quantity,
+unit: it.unit || null,
+expiryDate: it.expiryDate,
+source: "shopping_list",
+}))
+);
+await clearCheckedShoppingListItems();
+bulkReviewCard.hidden = true;
+bulkTransferItems = [];
+await load();
+} catch (err) {
+bulkStatusEl.textContent = "Fehler: " + err.message;
+} finally {
+bulkConfirmBtn.disabled = false;
+}
+});
 
   await load();
 }
