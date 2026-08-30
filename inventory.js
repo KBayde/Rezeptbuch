@@ -30,13 +30,14 @@ export async function renderInventory(container) {
         <p class="text-muted" id="inventory-count"></p>
         <p class="text-small text-muted" id="inventory-score-status" aria-live="polite"></p>
       </div>
-    </div>
+<a href="#/vorrat/foto-import" class="btn btn-secondary">📷 Vorrat per Foto erfassen</a>
+</div>
 
     <form id="add-inventory-form" class="inventory-add-form">
       <input type="text" id="inv-name" class="search-input" placeholder="Name (z. B. Rucola)" required />
       <input type="number" id="inv-quantity" step="any" min="0" placeholder="Menge" />
               <select id="inv-unit" required>${unitOptionsHtml("Stück")}</select>
-      <input type="date" id="inv-expiry" title="Mindesthaltbarkeitsdatum (optional)" />
+      <input type="date" id="inv-expiry" title="Mindesthaltbarkeitsdatum (Pflicht)" required />
       <button type="submit" class="btn btn-primary">+ Hinzufügen</button>
     </form>
 
@@ -200,12 +201,16 @@ export async function renderInventory(container) {
     const quantityRaw = form.querySelector("#inv-quantity").value;
     const unit = form.querySelector("#inv-unit").value.trim();
     const expiryDate = form.querySelector("#inv-expiry").value;
+if (!expiryDate) {
+alert("Bitte ein Mindesthaltbarkeitsdatum eintragen – MHD ist beim Anlegen eines Postens Pflicht.");
+return;
+}
     try {
       await addInventoryItem({
         name,
         quantity: quantityRaw === "" ? null : Number(quantityRaw),
         unit: unit || null,
-        expiryDate: expiryDate || null,
+        expiryDate,
         source: "manual",
       });
       form.reset();
