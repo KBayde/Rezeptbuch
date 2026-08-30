@@ -5,23 +5,23 @@
    ============================================================================ */
 
 :root {
-  --color-bg: #fff5e6;
+  --color-bg: #F7F2E8;
   --color-surface: #ffffff;
-  --color-surface-alt: #fbead0;
-  --color-border: #e9dcc0;
-  --color-text: #3a2e22;
-  --color-text-muted: #8c7f6e;
-  --color-primary: #aa492a;
-  --color-primary-dark: #7a3620;
-  --color-primary-tint: #fbeae2;
-  --color-accent: #8fa27a;
-  --color-accent-dark: #5d694f;
-  --color-highlight: #f2c166;
-  --color-highlight-tint: #fcf3e0;
+  --color-surface-alt: #f3e7d8;
+  --color-border: #e9d1b5;
+  --color-text: #493B32;
+  --color-text-muted: #89807a;
+  --color-primary: #C96F52;
+  --color-primary-dark: #91503b;
+  --color-primary-tint: #f8ece9;
+  --color-accent: #899B7A;
+  --color-accent-dark: #606c55;
+  --color-highlight: #E5C9A8;
+  --color-highlight-tint: #faf4ee;
   --color-danger: #ad3b26;
   --color-danger-tint: #f7e6e1;
-  --color-coffee: #4a3b2e;
-  --color-coffee-tint: #efe9e3;
+  --color-coffee: #493B32;
+  --color-coffee-tint: #edebea;
   --shadow-sm: 0 1px 2px rgba(42, 38, 32, 0.06), 0 1px 1px rgba(42, 38, 32, 0.04);
   --shadow-md: 0 8px 24px rgba(42, 38, 32, 0.08), 0 2px 6px rgba(42, 38, 32, 0.05);
   --shadow-lg: 0 20px 50px rgba(42, 38, 32, 0.14);
@@ -85,7 +85,7 @@ a { color: var(--color-primary); }
   align-items: center;
   justify-content: space-between;
   padding: 0.85rem 1.25rem;
-  background: rgba(255, 245, 230, 0.92);
+  background: rgba(247, 242, 232, 0.92);
   backdrop-filter: blur(8px);
   border-bottom: 1px solid var(--color-border);
 }
@@ -697,7 +697,7 @@ textarea { resize: vertical; font-family: var(--font-body); }
 .timetable-mealrow-label--fruehstueck {
   background: var(--color-highlight);
   color: var(--color-primary-dark);
-  border-left-color: #d9a640;
+  border-left-color: #b39d83;
 }
 .timetable-mealrow-label--mittag {
   background: var(--color-primary);
@@ -709,7 +709,7 @@ textarea { resize: vertical; font-family: var(--font-body); }
 }
 .timetable-mealrow-label--abendessen {
   background: var(--color-coffee);
-  border-left-color: #2f251c;
+  border-left-color: #332923;
 }
 
 .timetable-cell {
@@ -1993,8 +1993,8 @@ body.sandbox-mode::before {
     45deg,
     var(--color-highlight),
     var(--color-highlight) 12px,
-    #e8ac3e 12px,
-    #e8ac3e 24px
+    #c3ab8f 12px,
+    #c3ab8f 24px
   );
   color: var(--color-primary-dark);
   font-size: 0.72rem;
