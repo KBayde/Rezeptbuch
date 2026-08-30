@@ -30,6 +30,7 @@ export async function renderRecipeDetail(container, { id }) {
 
                                                         <div class="detail-meta-row">
                                                               <span>⏱ ${formatMinutes(recipe.prepTimeMinutes)}</span>
+${recipe.caloriesPerServing ? `<span>🔥 ${recipe.caloriesPerServing} kcal/Portion</span>` : ""}
                                                                     ${recipe.sourceText || recipe.sourceUrl ? `<span>📖 ${sourceHtml(recipe)}</span>` : ""}
                                                                         </div>
 
