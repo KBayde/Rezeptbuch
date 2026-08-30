@@ -10,7 +10,7 @@ clearShoppingList,
     updateShoppingListItemPrice,
     getAveragePrice,
 } from "./db.js";
-import { escapeHtml, formatQuantity, formatPrice, categorizeIngredient, CATEGORY_ORDER, unitOptionsHtml } from "./utils.js";
+import { escapeHtml, formatQuantity, formatPrice, categorizeIngredient, CATEGORY_ORDER, unitOptionsHtml, estimateExpiryDate } from "./utils.js";
 
 // Fragt eine grobe Preis-Schätzung fuer eine Zutat per Anthropic API ab (Fallback,
 // wenn noch keine eigene Preishistorie fuer diese Zutat existiert). Gibt null
@@ -174,7 +174,8 @@ input.addEventListener("blur", async () => {
                                                                                                                                                                                                                                                                                                                                       <input type="number" step="any" min="0" class="qa-quantity" placeholder="Menge" value="${prefillQty}" />
                                                                                                     <select class="qa-unit">${unitOptionsHtml(prefillUnit || "Stück")}</select>
                                                                                                                                                                                                                                                                                                                                                           <input type="date" class="qa-expiry" title="Mindesthaltbarkeitsdatum (Pflicht)" required />
-                                                                                                                                                                                                                                                                                                                                                                    <button type="submit" class="btn btn-primary btn-small">Übernehmen</button>
+<button type="button" class="btn-ghost expiry-estimate-btn qa-expiry-estimate" title="MHD schätzen">🤖</button>
+<button type="submit" class="btn btn-primary btn-small">Übernehmen</button>
                                                                                                                                                                                                                                                                                                                                                                               <button type="button" class="btn btn-ghost btn-small qa-cancel">Abbrechen</button>
                                                                                                                                                                                                                                                                                                                                                                                       </form>
                                                                                                                                                                                                                                                                                                                                                                                             </li>
@@ -309,13 +310,22 @@ ${spontaneousItems.map(itemHtml).join("")}
                 });
         });
         list.querySelectorAll(".inventory-quick-add").forEach((qaForm) => {
-                qaForm.addEventListener("submit", async (e) => {
-                          e.preventDefault();
-                          const itemId = qaForm.dataset.itemId;
-                          const sourceItem = currentItems.find((i) => i.id === itemId);
-                          if (!sourceItem) return;
+  const estimateBtn = qaForm.querySelector(".qa-expiry-estimate");
+  if (estimateBtn) {
+    estimateBtn.addEventListener("click", () => {
+      const itemId = qaForm.dataset.itemId;
+      const sourceItem = currentItems.find((i) => i.id === itemId);
+      if (!sourceItem) return;
+      qaForm.querySelector(".qa-expiry").value = estimateExpiryDate(sourceItem.name);
+    });
+  }
+  qaForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const itemId = qaForm.dataset.itemId;
+    const sourceItem = currentItems.find((i) => i.id === itemId);
+    if (!sourceItem) return;
 
-                                                const quantityRaw = qaForm.querySelector(".qa-quantity").value;
+    const quantityRaw = qaForm.querySelector(".qa-quantity").value;
                           const unit = qaForm.querySelector(".qa-unit").value.trim();
                           const expiryDate = qaForm.querySelector(".qa-expiry").value;
 if (!expiryDate) {
@@ -429,6 +439,7 @@ bulkItemsList.innerHTML = bulkTransferItems
 <input type="number" step="any" min="0" class="inv-photo-item-qty" data-index="${i}" value="${item.quantity ?? ""}" placeholder="Menge" />
 <select class="inv-photo-item-unit" data-index="${i}">${unitOptionsHtml(item.unit || "Stück")}</select>
 <input type="date" class="inv-photo-item-expiry" data-index="${i}" value="${item.expiryDate || ""}" required />
+<button type="button" class="btn-ghost expiry-estimate-btn" data-index="${i}" title="MHD schätzen">🤖</button>
 </li>
 `
 )
@@ -445,22 +456,32 @@ bulkTransferItems[Number(unitEl.dataset.index)].unit = unitEl.value.trim();
 });
 });
 bulkItemsList.querySelectorAll(".inv-photo-item-expiry").forEach((expEl) => {
-expEl.addEventListener("input", () => {
-const idx = Number(expEl.dataset.index);
-bulkTransferItems[idx].expiryDate = expEl.value;
-expEl.closest(".inventory-photo-item").classList.toggle("inventory-photo-item--missing-expiry", !expEl.value);
-});
-});
+    expEl.addEventListener("input", () => {
+      const idx = Number(expEl.dataset.index);
+      bulkTransferItems[idx].expiryDate = expEl.value;
+      expEl.closest(".inventory-photo-item").classList.toggle("inventory-photo-item--missing-expiry", !expEl.value);
+    });
+  });
+  bulkItemsList.querySelectorAll(".expiry-estimate-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const idx = Number(btn.dataset.index);
+      const item = bulkTransferItems[idx];
+      const expEl = bulkItemsList.querySelector(`.inv-photo-item-expiry[data-index="${idx}"]`);
+      item.expiryDate = estimateExpiryDate(item.name);
+      expEl.value = item.expiryDate;
+      expEl.closest(".inventory-photo-item").classList.remove("inventory-photo-item--missing-expiry");
+    });
+  });
 }
 
 moveCheckedBtn.addEventListener("click", () => {
 const checkedItems = currentItems.filter((i) => i.checked);
 if (!checkedItems.length) return;
 bulkTransferItems = checkedItems.map((item) => ({
-name: item.name,
-quantity: item.quantity,
-unit: item.unit || "Stück",
-expiryDate: "",
+  name: item.name,
+  quantity: item.quantity,
+  unit: item.unit || "Stück",
+  expiryDate: estimateExpiryDate(item.name),
 }));
 bulkStatusEl.hidden = true;
 bulkReviewCard.hidden = false;
