@@ -1064,6 +1064,24 @@ export async function addInventoryItem(item) {
   if (error) throw error;
 }
 
+export async function addInventoryItemsBulk(items) {
+const missing = items.find((it) => !it.expiryDate);
+if (missing) {
+throw new Error(`MHD fehlt bei "${missing.name}" - bitte fuer alle Posten ein Mindesthaltbarkeitsdatum angeben.`);
+}
+const rows = items.map((item) => ({
+name: item.name,
+quantity: item.quantity ?? null,
+unit: item.unit || null,
+expiry_date: item.expiryDate,
+source: item.source || "photo_import",
+workspace: currentWorkspace,
+}));
+const { error } = await supabase.from("inventory_items").insert(rows);
+if (error) throw error;
+}
+
+/** Bulk-Insert fuer die Foto-Inventur (und die Sammel-Uebernahme aus der Einkaufsliste): legt mehrere Posten auf einmal an. Jeder Posten braucht ein MHD (Pflichtfeld, siehe Vorrat-UI) - wird hier nochmal serverseitig abgesichert, falls die Frontend-Pruefung je umgangen wird. */
 /** changes: beliebige Teilmenge aus { quantity, unit, expiryDate }. */
 export async function updateInventoryItem(id, changes) {
   const payload = {};
