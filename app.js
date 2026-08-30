@@ -20,7 +20,7 @@ function renderShell() {
   document.body.innerHTML = `
     <div class="app-shell">
       <header class="topbar">
-        <a href="#/" class="brand"><img src="./logo-mascot.png" alt="" class="brand-logo" />CookCook</a>
+        <a href="#/" class="brand"><img src="./logo-mascot.png" alt="" class="brand-logo" />clevulo</a>
         <nav class="topbar-nav">
           <a href="#/">Rezepte</a>
           <a href="#/wochenplan">Wochenplan</a>
