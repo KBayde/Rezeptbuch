@@ -2095,3 +2095,39 @@ body.sandbox-mode .topbar {
 .agenda-entry--cooked {
   box-shadow: inset 0 0 0 1px rgba(143, 162, 122, 0.5);
 }
+
+
+/* ------------------------------ Foto-Inventur / MHD-Pflicht Review-Listen ------------------------------ */
+
+.inventory-photo-items {
+gap: 0.4rem;
+}
+.inventory-photo-item {
+flex-wrap: wrap;
+}
+.inv-photo-item-qty {
+width: 70px;
+flex-shrink: 0;
+}
+.inv-photo-item-unit {
+width: 100px;
+flex-shrink: 0;
+}
+.inv-photo-item-expiry {
+width: 150px;
+flex-shrink: 0;
+}
+.inventory-photo-item--missing-expiry .inv-photo-item-expiry {
+border-color: var(--color-danger);
+background: var(--color-danger-tint);
+}
+
+@media (max-width: 640px) {
+.inventory-photo-item .receipt-item-name {
+flex-basis: 100%;
+order: 1;
+}
+.inv-photo-item-qty, .inv-photo-item-unit, .inv-photo-item-expiry {
+order: 2;
+}
+}
