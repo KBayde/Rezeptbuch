@@ -12,6 +12,7 @@ import { renderLinkImport } from "./linkImport.js";
 import { renderInventory } from "./inventory.js";
 import { renderHouseholdCosts } from "./costs.js";
 import { renderReceiptImport } from "./receiptImport.js";
+import { renderSettings } from "./settings.js";
 
 let currentSession = null;
 
@@ -26,6 +27,7 @@ function renderShell() {
           <a href="#/einkaufsliste">Einkaufsliste</a>
           <a href="#/vorrat">Vorrat</a>
           <a href="#/haushaltskosten">Kosten</a>
+<a href="#/einstellungen">⚙️ Einstellungen</a>
         </nav>
         <div class="workspace-switch" id="workspace-switch"><button type="button" data-workspace="real" class="workspace-btn">Real</button><button type="button" data-workspace="sandbox" class="workspace-btn">Sandbox</button></div>
         <button id="logout-btn" class="btn btn-ghost btn-small">Abmelden</button>
@@ -108,6 +110,10 @@ function registerRoutes() {
           const container = document.getElementById("app");
           await renderReceiptImport(container);
     });
+route("/einstellungen", async () => {
+  const container = document.getElementById("app");
+  await renderSettings(container);
+});
 }
 
 let routerStarted = false;
