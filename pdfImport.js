@@ -49,7 +49,7 @@ export async function renderPdfImport(container) {
     errorEl.hidden = true;
     selectedFile = fileInput.files?.[0] || null;
     if (selectedFile && selectedFile.size > MAX_PDF_BYTES) {
-      errorEl.textContent = \`Diese PDF ist zu groß (\${(selectedFile.size / (1024 * 1024)).toFixed(1)} MB). Bitte eine PDF bis ca. 3 MB verwenden, oder das Rezept stattdessen per Foto erfassen.\`;
+      errorEl.textContent = `Diese PDF ist zu groß (${(selectedFile.size / (1024 * 1024)).toFixed(1)} MB). Bitte eine PDF bis ca. 3 MB verwenden, oder das Rezept stattdessen per Foto erfassen.`;
       errorEl.hidden = false;
       selectedFile = null;
       analyzeBtn.disabled = true;
