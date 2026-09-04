@@ -26,9 +26,10 @@ Antworte AUSSCHLIESSLICH mit einem einzelnen validen JSON-Objekt, ohne Markdown-
 
 Regeln:
 - "name": kurzer, alltagssprachlicher Produktname auf Deutsch (z. B. "Milch", "Eier", "Passierte Tomaten"), keine Markennamen sofern nicht eindeutig Teil der Alltagsbezeichnung.
-- "quantity" + "unit": plausible Schaetzung anhand des Fotos (z. B. eine sichtbare Packung Milch -> quantity 1, unit "Stück"; ein Netz Zwiebeln -> quantity 1, unit "Netz"). Wenn die Menge nicht sinnvoll schaetzbar ist, quantity null und unit null lassen statt zu raten.
+- Zaehlung: schau dir jedes sichtbare Exemplar einzeln und sorgfaeltig an, bevor du eine Anzahl angibst. Zaehle nicht ueberschlagsmaessig - wenn du z. B. 3 identische Packungen nebeneinander siehst, muss quantity exakt 3 sein, nicht 1 oder 2. Verdeckte oder nur teilweise sichtbare Packungen zaehlen mit, wenn du sie eindeutig als eigenstaendiges Exemplar erkennen kannst (z. B. an einer erkennbaren Kante oder Ecke); bei echter Unsicherheit lieber die konservativere (niedrigere) Zahl waehlen als raten.
+- "quantity" + "unit": bei abgepackten Trocken-/Vorratswaren (Nudeln, Reis, Mehl, Zucker, Huelsenfruechte, Gewuerze usw.) bevorzugt das GESAMTGEWICHT in Gramm schaetzen (aufgedrucktes Packungsgewicht mal Anzahl der sichtbaren Packungen), NICHT einfach "Stück" - das ist naeher an dem, was in Rezepten normalerweise steht. "Stück" nur fuer wirklich diskret gezaehlte Dinge verwenden (z. B. Eier, einzelne Zitronen/Aepfel, Dosen, Flaschen, Glaeser). Wenn weder Gewicht noch eine sinnvolle Stueckzahl erkennbar ist, quantity null und unit null lassen statt zu raten.
 - "expiryDate": NUR setzen, wenn ein Mindesthaltbarkeitsdatum oder Verbrauchsdatum tatsaechlich lesbar auf der Verpackung im Foto zu sehen ist, im Format "YYYY-MM-DD". Ist kein Datum lesbar (der allermeiste Regelfall), gib expiryDate: null zurueck - erfinde niemals ein Datum.
-- Jede erkennbare, einzelne Produktart wird eine eigene Zeile, auch wenn mehrere Exemplare sichtbar sind (dann quantity entsprechend hoeher, keine Duplikat-Zeilen fuer dasselbe Produkt).
+- Jede erkennbare, einzelne Produktart wird eine eigene Zeile (mit der oben beschriebenen sorgfaeltig gezaehlten quantity), keine Duplikat-Zeilen fuer dasselbe Produkt.
 - Ignoriere nicht essbare Dinge, Verpackungsmuell, unklare/nicht identifizierbare Gegenstaende.
 - Wenn kein Foto erkennbar Lebensmittel zeigt, gib { "items": [] } zurueck statt zu raten oder zu erfinden.`;
 
