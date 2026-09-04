@@ -936,7 +936,7 @@ export async function generateShoppingList(startDate, endDate) {
   if (entries.length === 0) {
     const { error } = await supabase.from("shopping_list_items").delete().eq("source", "plan").eq("workspace", currentWorkspace);
     if (error) throw error;
-    return 0;
+    return { created: 0, skipped: [] };
   }
 
   const recipeIds = [...new Set(entries.map((e) => e.recipeId).filter(Boolean))];
@@ -984,6 +984,26 @@ export async function generateShoppingList(startDate, endDate) {
 
   items.sort((a, b) => a.name.localeCompare(b.name, "de"));
 
+  // Zutaten, die bereits (in irgendeiner Menge) im Vorrat liegen, werden nicht
+  // auf die Einkaufsliste gesetzt - bewusst ein einfacher Ja/Nein-Namensabgleich
+  // ohne Mengen-/Einheiten-Vergleich (dieselbe Logik wie bei den
+  // Wochenplan-Vorschlaegen aus dem Vorrat), da Vorrats- und Rezept-Einheiten
+  // sich nicht zuverlaessig genug vergleichen lassen.
+  let vorratItems = [];
+  try {
+    vorratItems = await listInventoryItems();
+  } catch {
+    vorratItems = [];
+  }
+  const skipped = [];
+  const finalItems = vorratItems.length === 0
+    ? items
+    : items.filter((it) => {
+        const inStock = vorratItems.some((v) => ingredientNamesMatch(normalizeIngredientName(it.name), normalizeIngredientName(v.name)));
+        if (inStock) skipped.push(it.name);
+        return !inStock;
+      });
+
   const { error: deleteError } = await supabase
     .from("shopping_list_items")
     .delete()
@@ -991,8 +1011,8 @@ export async function generateShoppingList(startDate, endDate) {
     .eq("workspace", currentWorkspace);
   if (deleteError) throw deleteError;
 
-  if (items.length > 0) {
-    const rows = items.map((it, i) => ({
+  if (finalItems.length > 0) {
+    const rows = finalItems.map((it, i) => ({
       name: it.name,
       quantity: it.quantity,
       unit: it.unit || null,
@@ -1004,7 +1024,7 @@ export async function generateShoppingList(startDate, endDate) {
     if (insertError) throw insertError;
   }
 
-  return items.length;
+  return { created: finalItems.length, skipped };
 }
 
 // --------------------------- Vorrat / Inventar ---------------------------
