@@ -298,6 +298,62 @@ const OTHER_CATEGORY = { key: "other", label: "Sonstiges", icon: "🛒" };
 /** Anzeigereihenfolge der Kategorien (inkl. "Sonstiges" als letzte Gruppe). */
 export const CATEGORY_ORDER = [...CATEGORY_RULES.map((c) => c.key), OTHER_CATEGORY.key];
 
+/** Anzeigeinfos (Label + Icon) je Kategorie-Schlüssel, für Dropdowns/Badges im Vorrat. */
+export const CATEGORY_INFO = Object.fromEntries([
+...CATEGORY_RULES.map((c) => [c.key, { label: c.label, icon: c.icon }]),
+[OTHER_CATEGORY.key, { label: OTHER_CATEGORY.label, icon: OTHER_CATEGORY.icon }],
+]);
+
+/** Baut <option>-Markup für eine Lebensmittelart-Auswahl (nutzt dieselben Kategorien wie die Einkaufsliste). */
+export function categoryOptionsHtml(selected) {
+return CATEGORY_ORDER.map((key) => {
+const info = CATEGORY_INFO[key];
+return `<option value="${key}"${key === selected ? " selected" : ""}>${info.icon} ${escapeHtml(info.label)}</option>`;
+}).join("");
+}
+
+// --------------------------- Lagerort (Vorrat) ---------------------------
+
+/** Moegliche Lagerorte fuer Vorrats-Posten, fuer Dropdowns/Badges. */
+export const STORAGE_LOCATIONS = [
+{ key: "kuehlschrank", label: "Kühlschrank", icon: "❄️" },
+{ key: "gefrierschrank", label: "Gefrierschrank", icon: "🧊" },
+{ key: "vorrat", label: "Vorratsschrank", icon: "🗄️" },
+];
+
+/** Baut <option>-Markup für eine Lagerort-Auswahl. */
+export function storageLocationOptionsHtml(selected) {
+return STORAGE_LOCATIONS.map(
+(s) => `<option value="${s.key}"${s.key === selected ? " selected" : ""}>${s.icon} ${escapeHtml(s.label)}</option>`
+).join("");
+}
+
+const STORAGE_OVERRIDES = [
+{ location: "kuehlschrank", keywords: ["salat", "spinat", "rucola", "kräuter", "petersilie", "basilikum", "koriander", "schnittlauch", "minze", "dill", "pilz", "champignon", "beere", "erdbeere", "himbeere"] },
+{ location: "vorrat", keywords: ["zwiebel", "knoblauch", "kartoffel", "kürbis"] },
+];
+
+const STORAGE_BY_CATEGORY = {
+meat: "kuehlschrank",
+dairy: "kuehlschrank",
+produce: "kuehlschrank",
+bakery: "vorrat",
+frozen: "gefrierschrank",
+beverages: "vorrat",
+spices: "vorrat",
+pantry: "vorrat",
+other: "vorrat",
+};
+
+/** Grobe Schätzung des Lagerorts (Kühlschrank/Gefrierschrank/Vorratsschrank) für einen Lebensmittelnamen. */
+export function estimateStorageLocation(name) {
+const n = (name || "").toLowerCase();
+const override = STORAGE_OVERRIDES.find((o) => o.keywords.some((kw) => n.includes(kw)));
+if (override) return override.location;
+const cat = categorizeIngredient(name);
+return STORAGE_BY_CATEGORY[cat.key] ?? "vorrat";
+}
+
 /** Ordnet einen Zutatnamen per Stichwortsuche einer Einkaufslisten-Kategorie zu. */
 export function categorizeIngredient(name) {
   const n = (name || "").toLowerCase();
