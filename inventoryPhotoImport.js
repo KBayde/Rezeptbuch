@@ -1,6 +1,6 @@
 import { navigate } from "./router.js";
 import { addInventoryItemsBulk } from "./db.js";
-import { escapeHtml, unitOptionsHtml, estimateExpiryDate } from "./utils.js";
+import { escapeHtml, unitOptionsHtml, estimateExpiryDate, categorizeIngredient, estimateStorageLocation, categoryOptionsHtml, storageLocationOptionsHtml } from "./utils.js";
 
 const MAX_IMAGES = 3;
 
@@ -141,6 +141,8 @@ photoItems = (data.items || []).map((it) => ({
   quantity: it.quantity,
   unit: it.unit || "Stück",
   expiryDate: it.expiryDate || estimateExpiryDate(it.name),
+  category: categorizeIngredient(it.name).key,
+  storageLocation: estimateStorageLocation(it.name),
   checked: true,
 }));
 uploadCard.hidden = true;
@@ -165,6 +167,8 @@ itemsList.innerHTML = photoItems
 <input type="text" class="receipt-item-name" data-index="${i}" value="${escapeHtml(item.name)}" />
 <input type="number" step="any" min="0" class="inv-photo-item-qty" data-index="${i}" value="${item.quantity ?? ""}" placeholder="Menge" />
 <select class="inv-photo-item-unit" data-index="${i}">${unitOptionsHtml(item.unit || "Stück")}</select>
+<select class="inv-photo-item-category" data-index="${i}">${categoryOptionsHtml(item.category || "other")}</select>
+<select class="inv-photo-item-storage" data-index="${i}">${storageLocationOptionsHtml(item.storageLocation || "vorrat")}</select>
 <input type="date" class="inv-photo-item-expiry" data-index="${i}" value="${item.expiryDate || ""}" required />
 <button type="button" class="btn-ghost expiry-estimate-btn" data-index="${i}" title="MHD schätzen">🤖</button>
 </li>
@@ -194,6 +198,16 @@ photoItems[Number(qtyEl.dataset.index)].quantity = v === "" ? null : Number(v);
 itemsList.querySelectorAll(".inv-photo-item-unit").forEach((unitEl) => {
 unitEl.addEventListener("change", () => {
 photoItems[Number(unitEl.dataset.index)].unit = unitEl.value.trim();
+});
+});
+itemsList.querySelectorAll(".inv-photo-item-category").forEach((catEl) => {
+catEl.addEventListener("change", () => {
+photoItems[Number(catEl.dataset.index)].category = catEl.value;
+});
+});
+itemsList.querySelectorAll(".inv-photo-item-storage").forEach((storageEl) => {
+storageEl.addEventListener("change", () => {
+photoItems[Number(storageEl.dataset.index)].storageLocation = storageEl.value;
 });
 });
 itemsList.querySelectorAll(".inv-photo-item-expiry").forEach((expEl) => {
@@ -236,6 +250,8 @@ name: it.name.trim(),
 quantity: it.quantity,
 unit: it.unit || null,
 expiryDate: it.expiryDate,
+category: it.category || null,
+storageLocation: it.storageLocation || null,
 source: "photo_import",
 }))
 );
