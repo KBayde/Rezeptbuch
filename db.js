@@ -806,8 +806,6 @@ return data.map((row) => ({
       unit: row.unit,
       checked: row.checked,
       source: row.source,
-      category: row.category || null,
-      storageLocation: row.storage_location || null,
       plannedPrice: row.planned_price === null || row.planned_price === undefined ? null : Number(row.planned_price),
       actualPrice: row.actual_price === null || row.actual_price === undefined ? null : Number(row.actual_price),
 }));
@@ -1023,6 +1021,8 @@ function normalizeInventoryItem(row) {
     unit: row.unit,
     expiryDate: row.expiry_date,
     source: row.source,
+    category: row.category || null,
+    storageLocation: row.storage_location || null,
   };
 }
 
