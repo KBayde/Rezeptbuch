@@ -562,7 +562,13 @@ shoppingBtn.textContent = "Erstelle…";
 try {
 const start = formatDateISO(currentWeekStart);
 const end = formatDateISO(addDays(currentWeekStart, 6));
-await generateShoppingList(start, end);
+const result = await generateShoppingList(start, end);
+if (result && result.skipped && result.skipped.length > 0) {
+const n = result.skipped.length;
+alert(
+`Einkaufsliste erstellt. ${n} Zutat${n === 1 ? "" : "en"} war${n === 1 ? "" : "en"} bereits im Vorrat und wurde${n === 1 ? "" : "n"} deshalb nicht mit aufgenommen: ${result.skipped.join(", ")}.`
+);
+}
 navigate("/einkaufsliste");
 } catch (err) {
 alert("Einkaufsliste konnte nicht erstellt werden: " + err.message);
