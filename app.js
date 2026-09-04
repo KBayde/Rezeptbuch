@@ -9,6 +9,7 @@ import { renderShoppingList } from "./shoppingList.js";
 import { renderPhotoImport } from "./photoImport.js";
 import { renderYoutubeImport } from "./youtubeImport.js";
 import { renderLinkImport } from "./linkImport.js";
+import { renderPdfImport } from "./pdfImport.js";
 import { renderInventory } from "./inventory.js";
 import { renderInventoryPhotoImport } from "./inventoryPhotoImport.js";
 import { renderHouseholdCosts } from "./costs.js";
@@ -82,6 +83,10 @@ function registerRoutes() {
   route("/rezepte/link-import", async () => {
     const container = document.getElementById("app");
     await renderLinkImport(container);
+  });
+  route("/rezepte/pdf-import", async () => {
+    const container = document.getElementById("app");
+    await renderPdfImport(container);
   });
   route("/rezepte/:id/bearbeiten", async (params) => {
     const container = document.getElementById("app");
