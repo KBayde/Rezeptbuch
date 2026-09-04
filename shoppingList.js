@@ -10,7 +10,7 @@ clearShoppingList,
     updateShoppingListItemPrice,
     getAveragePrice,
 } from "./db.js";
-import { escapeHtml, formatQuantity, formatPrice, categorizeIngredient, CATEGORY_ORDER, unitOptionsHtml, estimateExpiryDate } from "./utils.js";
+import { escapeHtml, formatQuantity, formatPrice, categorizeIngredient, CATEGORY_ORDER, unitOptionsHtml, estimateExpiryDate, estimateStorageLocation, categoryOptionsHtml, storageLocationOptionsHtml } from "./utils.js";
 
 // Fragt eine grobe Preis-Schätzung fuer eine Zutat per Anthropic API ab (Fallback,
 // wenn noch keine eigene Preishistorie fuer diese Zutat existiert). Gibt null
@@ -173,6 +173,8 @@ input.addEventListener("blur", async () => {
                                                                                                                                                                                                                                                                                                                             <form class="inventory-quick-add" data-item-id="${item.id}" hidden>
                                                                                                                                                                                                                                                                                                                                       <input type="number" step="any" min="0" class="qa-quantity" placeholder="Menge" value="${prefillQty}" />
                                                                                                     <select class="qa-unit">${unitOptionsHtml(prefillUnit || "Stück")}</select>
+                                                                                                    <select class="qa-category">${categoryOptionsHtml(categorizeIngredient(item.name).key)}</select>
+                                                                                                    <select class="qa-storage">${storageLocationOptionsHtml(estimateStorageLocation(item.name))}</select>
                                                                                                                                                                                                                                                                                                                                                           <input type="date" class="qa-expiry" title="Mindesthaltbarkeitsdatum (Pflicht)" required />
 <button type="button" class="btn-ghost expiry-estimate-btn qa-expiry-estimate" title="MHD schätzen">🤖</button>
 <button type="submit" class="btn btn-primary btn-small">Übernehmen</button>
@@ -327,6 +329,8 @@ ${spontaneousItems.map(itemHtml).join("")}
 
     const quantityRaw = qaForm.querySelector(".qa-quantity").value;
                           const unit = qaForm.querySelector(".qa-unit").value.trim();
+                          const category = qaForm.querySelector(".qa-category").value;
+                          const storageLocation = qaForm.querySelector(".qa-storage").value;
                           const expiryDate = qaForm.querySelector(".qa-expiry").value;
 if (!expiryDate) {
 alert("Bitte ein Mindesthaltbarkeitsdatum eintragen – MHD ist beim Übernehmen in den Vorrat Pflicht.");
@@ -340,6 +344,8 @@ return;
                                                     quantity: quantityRaw === "" ? null : Number(quantityRaw),
                                                     unit: unit || null,
                                                     expiryDate,
+                                                    category,
+                                                    storageLocation,
                                                     source: "shopping_list",
                                       });
                                       qaForm.hidden = true;
@@ -438,6 +444,8 @@ bulkItemsList.innerHTML = bulkTransferItems
 <span class="receipt-item-name">${escapeHtml(item.name)}</span>
 <input type="number" step="any" min="0" class="inv-photo-item-qty" data-index="${i}" value="${item.quantity ?? ""}" placeholder="Menge" />
 <select class="inv-photo-item-unit" data-index="${i}">${unitOptionsHtml(item.unit || "Stück")}</select>
+<select class="inv-photo-item-category" data-index="${i}">${categoryOptionsHtml(item.category || "other")}</select>
+<select class="inv-photo-item-storage" data-index="${i}">${storageLocationOptionsHtml(item.storageLocation || "vorrat")}</select>
 <input type="date" class="inv-photo-item-expiry" data-index="${i}" value="${item.expiryDate || ""}" required />
 <button type="button" class="btn-ghost expiry-estimate-btn" data-index="${i}" title="MHD schätzen">🤖</button>
 </li>
@@ -455,23 +463,33 @@ unitEl.addEventListener("change", () => {
 bulkTransferItems[Number(unitEl.dataset.index)].unit = unitEl.value.trim();
 });
 });
+bulkItemsList.querySelectorAll(".inv-photo-item-category").forEach((catEl) => {
+catEl.addEventListener("change", () => {
+bulkTransferItems[Number(catEl.dataset.index)].category = catEl.value;
+});
+});
+bulkItemsList.querySelectorAll(".inv-photo-item-storage").forEach((storageEl) => {
+storageEl.addEventListener("change", () => {
+bulkTransferItems[Number(storageEl.dataset.index)].storageLocation = storageEl.value;
+});
+});
 bulkItemsList.querySelectorAll(".inv-photo-item-expiry").forEach((expEl) => {
-    expEl.addEventListener("input", () => {
-      const idx = Number(expEl.dataset.index);
-      bulkTransferItems[idx].expiryDate = expEl.value;
-      expEl.closest(".inventory-photo-item").classList.toggle("inventory-photo-item--missing-expiry", !expEl.value);
-    });
-  });
-  bulkItemsList.querySelectorAll(".expiry-estimate-btn").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const idx = Number(btn.dataset.index);
-      const item = bulkTransferItems[idx];
-      const expEl = bulkItemsList.querySelector(`.inv-photo-item-expiry[data-index="${idx}"]`);
-      item.expiryDate = estimateExpiryDate(item.name);
-      expEl.value = item.expiryDate;
-      expEl.closest(".inventory-photo-item").classList.remove("inventory-photo-item--missing-expiry");
-    });
-  });
+expEl.addEventListener("input", () => {
+const idx = Number(expEl.dataset.index);
+bulkTransferItems[idx].expiryDate = expEl.value;
+expEl.closest(".inventory-photo-item").classList.toggle("inventory-photo-item--missing-expiry", !expEl.value);
+});
+});
+bulkItemsList.querySelectorAll(".expiry-estimate-btn").forEach((btn) => {
+btn.addEventListener("click", () => {
+const idx = Number(btn.dataset.index);
+const item = bulkTransferItems[idx];
+const expEl = bulkItemsList.querySelector(`.inv-photo-item-expiry[data-index="${idx}"]`);
+item.expiryDate = estimateExpiryDate(item.name);
+expEl.value = item.expiryDate;
+expEl.closest(".inventory-photo-item").classList.remove("inventory-photo-item--missing-expiry");
+});
+});
 }
 
 moveCheckedBtn.addEventListener("click", () => {
@@ -482,6 +500,8 @@ bulkTransferItems = checkedItems.map((item) => ({
   quantity: item.quantity,
   unit: item.unit || "Stück",
   expiryDate: estimateExpiryDate(item.name),
+  category: categorizeIngredient(item.name).key,
+  storageLocation: estimateStorageLocation(item.name),
 }));
 bulkStatusEl.hidden = true;
 bulkReviewCard.hidden = false;
@@ -510,6 +530,8 @@ name: it.name,
 quantity: it.quantity,
 unit: it.unit || null,
 expiryDate: it.expiryDate,
+category: it.category || null,
+storageLocation: it.storageLocation || null,
 source: "shopping_list",
 }))
 );
