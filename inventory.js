@@ -28,16 +28,16 @@ function expiryBadge(expiryDate) {
   if (days === null) return { text: "Kein MHD", cls: "inventory-badge--none" };
   if (days < 0) {
     const n = Math.abs(days);
-    return { text: \`Abgelaufen (\${n} Tag\${n === 1 ? "" : "e"})\`, cls: "inventory-badge--expired" };
+    return { text: `Abgelaufen (${n} Tag${n === 1 ? "" : "e"})`, cls: "inventory-badge--expired" };
   }
   if (days === 0) return { text: "Läuft heute ab", cls: "inventory-badge--expired" };
   if (days === 1) return { text: "Läuft morgen ab", cls: "inventory-badge--expired" };
-  if (days <= 3) return { text: \`Noch \${days} Tage\`, cls: "inventory-badge--soon" };
-  return { text: \`Noch \${days} Tage\`, cls: "inventory-badge--ok" };
+  if (days <= 3) return { text: `Noch ${days} Tage`, cls: "inventory-badge--soon" };
+  return { text: `Noch ${days} Tage`, cls: "inventory-badge--ok" };
 }
 
 export async function renderInventory(container) {
-  container.innerHTML = \`
+  container.innerHTML = `
     <div class="page-header">
       <div>
         <h1>Vorrat</h1>
@@ -55,7 +55,7 @@ export async function renderInventory(container) {
     <div class="toolbar" id="inventory-filters">
       <select id="inv-filter-category">
         <option value="">Alle Lebensmittelarten</option>
-        \${categoryOptionsHtml(null)}
+        ${categoryOptionsHtml(null)}
       </select>
     </div>
 
@@ -73,9 +73,9 @@ export async function renderInventory(container) {
         <form id="add-inventory-form" class="inventory-add-form">
           <input type="text" id="inv-name" class="search-input" placeholder="Name (z. B. Rucola)" required />
           <input type="number" id="inv-quantity" step="any" min="0" placeholder="Menge" />
-          <select id="inv-unit" required>\${unitOptionsHtml("Stück")}</select>
-          <select id="inv-category">\${categoryOptionsHtml("other")}</select>
-          <select id="inv-storage">\${storageLocationOptionsHtml("vorrat")}</select>
+          <select id="inv-unit" required>${unitOptionsHtml("Stück")}</select>
+          <select id="inv-category">${categoryOptionsHtml("other")}</select>
+          <select id="inv-storage">${storageLocationOptionsHtml("vorrat")}</select>
           <div class="calories-field-row">
             <input type="date" id="inv-expiry" title="Mindesthaltbarkeitsdatum (Pflicht)" required />
             <button type="button" id="inv-expiry-estimate" class="btn-ghost expiry-estimate-btn" title="MHD schätzen (z. B. wenn keins aufgedruckt ist)">🤖</button>
@@ -84,7 +84,7 @@ export async function renderInventory(container) {
         </form>
       </div>
     </div>
-  \`;
+  `;
 
   const list = container.querySelector("#inventory-items");
   const emptyState = container.querySelector("#inventory-empty");
@@ -124,33 +124,33 @@ export async function renderInventory(container) {
     const badge = expiryBadge(item.expiryDate);
     const catInfo = CATEGORY_INFO[item.category] || null;
     const storageInfo = STORAGE_LOCATIONS.find((s) => s.key === item.storageLocation) || null;
-    return \`
-      <li class="inventory-item" data-item-id="\${item.id}">
+    return `
+      <li class="inventory-item" data-item-id="${item.id}">
         <div class="inventory-item-main">
-          <span class="inventory-item-name">\${escapeHtml(item.name)}</span>
-          <span class="inventory-badge \${badge.cls}" title="\${
+          <span class="inventory-item-name">${escapeHtml(item.name)}</span>
+          <span class="inventory-badge ${badge.cls}" title="${
             item.expiryDate ? escapeHtml(formatDateDisplayFull(item.expiryDate)) : ""
-          }">\${badge.text}</span>
-          \${catInfo ? \`<span class="inventory-badge inventory-badge--tag">\${catInfo.icon} \${escapeHtml(catInfo.label)}</span>\` : ""}
-          \${storageInfo ? \`<span class="inventory-badge inventory-badge--tag">\${storageInfo.icon} \${escapeHtml(storageInfo.label)}</span>\` : ""}
+          }">${badge.text}</span>
+          ${catInfo ? `<span class="inventory-badge inventory-badge--tag">${catInfo.icon} ${escapeHtml(catInfo.label)}</span>` : ""}
+          ${storageInfo ? `<span class="inventory-badge inventory-badge--tag">${storageInfo.icon} ${escapeHtml(storageInfo.label)}</span>` : ""}
         </div>
         <div class="inventory-item-controls">
           <input
             type="number" step="any" min="0" class="inventory-qty-input"
-            data-item-id="\${item.id}" value="\${item.quantity ?? ""}" placeholder="Menge"
+            data-item-id="${item.id}" value="${item.quantity ?? ""}" placeholder="Menge"
           />
-          <select class="inventory-unit-input" data-item-id="\${item.id}">\${unitOptionsHtml(item.unit || "Stück")}</select>
+          <select class="inventory-unit-input" data-item-id="${item.id}">${unitOptionsHtml(item.unit || "Stück")}</select>
           <input
             type="date" class="inventory-expiry-input"
-            data-item-id="\${item.id}" value="\${item.expiryDate || ""}"
+            data-item-id="${item.id}" value="${item.expiryDate || ""}"
           />
-          <select class="inventory-category-input" data-item-id="\${item.id}">\${categoryOptionsHtml(item.category || "other")}</select>
-          <select class="inventory-storage-input" data-item-id="\${item.id}">\${storageLocationOptionsHtml(item.storageLocation || "vorrat")}</select>
-          <button class="row-action row-action--used inventory-item-used" data-item-id="\${item.id}" title="Aufgebraucht" type="button">✅</button>
-          <button class="row-action row-action--wasted inventory-item-wasted" data-item-id="\${item.id}" title="Weggeworfen" type="button">🗑️</button>
+          <select class="inventory-category-input" data-item-id="${item.id}">${categoryOptionsHtml(item.category || "other")}</select>
+          <select class="inventory-storage-input" data-item-id="${item.id}">${storageLocationOptionsHtml(item.storageLocation || "vorrat")}</select>
+          <button class="row-action row-action--used inventory-item-used" data-item-id="${item.id}" title="Aufgebraucht" type="button">✅</button>
+          <button class="row-action row-action--wasted inventory-item-wasted" data-item-id="${item.id}" title="Weggeworfen" type="button">🗑️</button>
         </div>
       </li>
-    \`;
+    `;
   }
 
   function wireItems() {
@@ -215,7 +215,7 @@ export async function renderInventory(container) {
         btn.disabled = true;
         try {
           const points = await markInventoryItemUsed(btn.dataset.itemId);
-          scoreStatus.textContent = \`+\${points} 🦫 Aufgebraucht, bevor's schlecht wurde!\`;
+          scoreStatus.textContent = `+${points} 🦫 Aufgebraucht, bevor's schlecht wurde!`;
           setTimeout(() => {
             scoreStatus.textContent = "";
           }, 4000);
@@ -232,7 +232,7 @@ export async function renderInventory(container) {
         btn.disabled = true;
         try {
           const points = await markInventoryItemWasted(btn.dataset.itemId);
-          scoreStatus.textContent = \`\${points} 🦫 Autsch, das hat sich der Biber weggezwickert.\`;
+          scoreStatus.textContent = `${points} 🦫 Autsch, das hat sich der Biber weggezwickert.`;
           setTimeout(() => {
             scoreStatus.textContent = "";
           }, 4000);
@@ -251,13 +251,13 @@ export async function renderInventory(container) {
       if (i.storageLocation && counts[i.storageLocation] !== undefined) counts[i.storageLocation]++;
     });
     storagePicker.innerHTML = STORAGE_LOCATIONS.map(
-      (s) => \`
-        <button type="button" class="storage-card \${filterStorage === s.key ? "storage-card--active" : ""}" data-location="\${s.key}">
-          <span class="storage-card-icon">\${s.icon}</span>
-          <span class="storage-card-label">\${escapeHtml(s.label)}</span>
-          <span class="storage-card-count">\${counts[s.key] ?? 0}</span>
+      (s) => `
+        <button type="button" class="storage-card ${filterStorage === s.key ? "storage-card--active" : ""}" data-location="${s.key}">
+          <span class="storage-card-icon">${s.icon}</span>
+          <span class="storage-card-label">${escapeHtml(s.label)}</span>
+          <span class="storage-card-count">${counts[s.key] ?? 0}</span>
         </button>
-      \`
+      `
     ).join("");
     storagePicker.querySelectorAll(".storage-card").forEach((btn) => {
       btn.addEventListener("click", () => {
@@ -275,7 +275,7 @@ export async function renderInventory(container) {
       (i) => (!catFilter || i.category === catFilter) && (!filterStorage || i.storageLocation === filterStorage)
     );
 
-    countEl.textContent = allItems.length ? \`\${items.length} von \${allItems.length} Posten im Vorrat\` : "";
+    countEl.textContent = allItems.length ? `${items.length} von ${allItems.length} Posten im Vorrat` : "";
     emptyState.hidden = allItems.length > 0;
 
     list.innerHTML = items.map(itemRowHtml).join("");
@@ -283,13 +283,13 @@ export async function renderInventory(container) {
   }
 
   async function load() {
-    list.innerHTML = \`<p class="text-muted">Lade…</p>\`;
+    list.innerHTML = `<p class="text-muted">Lade…</p>`;
     try {
       allItems = await listInventoryItems();
     } catch (err) {
-      list.innerHTML = \`<p class="form-error">Vorrat konnte nicht geladen werden: \${escapeHtml(
+      list.innerHTML = `<p class="form-error">Vorrat konnte nicht geladen werden: ${escapeHtml(
         err.message
-      )}</p>\`;
+      )}</p>`;
       return;
     }
 
@@ -299,28 +299,28 @@ export async function renderInventory(container) {
     // ein aktiver Filter keine Ablaufwarnung versteckt.
     const soonItems = allItems.filter((i) => i.expiryDate && daysUntil(i.expiryDate) <= 3);
     soonWrap.innerHTML = soonItems.length
-      ? \`
+      ? `
         <div class="inventory-soon card">
           <h2>⏰ Läuft bald ab</h2>
           <ul class="inventory-soon-list">
-            \${soonItems
+            ${soonItems
               .map((i) => {
                 const badge = expiryBadge(i.expiryDate);
                 const qty =
                   i.quantity !== null
-                    ? \` (\${formatQuantity(i.quantity)}\${i.unit ? " " + escapeHtml(i.unit) : ""})\`
+                    ? ` (${formatQuantity(i.quantity)}${i.unit ? " " + escapeHtml(i.unit) : ""})`
                     : "";
-                return \`
+                return `
                   <li>
-                    <span class="inventory-badge \${badge.cls}">\${badge.text}</span>
-                    <span>\${escapeHtml(i.name)}\${qty}</span>
+                    <span class="inventory-badge ${badge.cls}">${badge.text}</span>
+                    <span>${escapeHtml(i.name)}${qty}</span>
                   </li>
-                \`;
+                `;
               })
               .join("")}
           </ul>
         </div>
-      \`
+      `
       : "";
 
     renderStoragePicker();
