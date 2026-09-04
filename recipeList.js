@@ -18,6 +18,7 @@ export async function renderRecipeList(container) {
                                                                       <a href="#/rezepte/foto-import" class="btn btn-secondary">📷 Per Foto</a>
                                                                               <a href="#/rezepte/youtube-import" class="btn btn-secondary">▶️ Per YouTube</a>
                                                                                       <a href="#/rezepte/link-import" class="btn btn-secondary">🔗 Per Link</a>
+                                                                                              <a href="#/rezepte/pdf-import" class="btn btn-secondary">📄 Per PDF</a>
                                                                                               <a href="#/rezepte/neu" class="btn btn-primary">+ Neues Rezept</a>
                                                                                                     </div>
                                                                                                         </div>
