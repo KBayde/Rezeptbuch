@@ -806,6 +806,8 @@ return data.map((row) => ({
       unit: row.unit,
       checked: row.checked,
       source: row.source,
+      category: row.category || null,
+      storageLocation: row.storage_location || null,
       plannedPrice: row.planned_price === null || row.planned_price === undefined ? null : Number(row.planned_price),
       actualPrice: row.actual_price === null || row.actual_price === undefined ? null : Number(row.actual_price),
 }));
@@ -1059,6 +1061,8 @@ export async function addInventoryItem(item) {
     unit: item.unit || null,
     expiry_date: item.expiryDate || null,
     source: item.source || "manual",
+    category: item.category || null,
+    storage_location: item.storageLocation || null,
     workspace: currentWorkspace,
   });
   if (error) throw error;
@@ -1075,6 +1079,8 @@ quantity: item.quantity ?? null,
 unit: item.unit || null,
 expiry_date: item.expiryDate,
 source: item.source || "photo_import",
+category: item.category || null,
+storage_location: item.storageLocation || null,
 workspace: currentWorkspace,
 }));
 const { error } = await supabase.from("inventory_items").insert(rows);
@@ -1088,6 +1094,8 @@ export async function updateInventoryItem(id, changes) {
   if ("quantity" in changes) payload.quantity = changes.quantity;
   if ("unit" in changes) payload.unit = changes.unit;
   if ("expiryDate" in changes) payload.expiry_date = changes.expiryDate;
+  if ("category" in changes) payload.category = changes.category;
+  if ("storageLocation" in changes) payload.storage_location = changes.storageLocation;
   const { error } = await supabase.from("inventory_items").update(payload).eq("id", id);
   if (error) throw error;
 }
