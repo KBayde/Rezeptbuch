@@ -34,6 +34,7 @@ const VIEW_STORAGE_KEY = "cookcook-wochenplan-view";
 export async function renderMealPlan(container) {
 const today = new Date();
 let currentWeekStart = getWeekStart(today);
+let weekStartDay = 1;
 let armTwoDays = false;
 let currentEntries = [];
 let allCombinations = []; let recentCustomMeals = []; let dailyCalorieTarget = null;
@@ -127,7 +128,7 @@ return;
 }
 
 try {
-allCombinations = await listMealCombinations(); } catch { allCombinations = []; } try { recentCustomMeals = await listRecentCustomMealTitles(); } catch { recentCustomMeals = []; } try { dailyCalorieTarget = await getSetting("daily_calorie_target"); } catch { dailyCalorieTarget = null; }
+allCombinations = await listMealCombinations(); } catch { allCombinations = []; } try { recentCustomMeals = await listRecentCustomMealTitles(); } catch { recentCustomMeals = []; } try { dailyCalorieTarget = await getSetting("daily_calorie_target"); } catch { dailyCalorieTarget = null; } try { const rawWeekStartDay = await getSetting("week_start_day"); weekStartDay = rawWeekStartDay !== null && rawWeekStartDay !== undefined && rawWeekStartDay !== "" ? Number(rawWeekStartDay) : 1; } catch { weekStartDay = 1; } currentWeekStart = getWeekStart(today, weekStartDay);
 
 function setArmTwoDays(value) {
 armTwoDays = value;
@@ -491,7 +492,7 @@ currentWeekStart = addDays(currentWeekStart, 7);
 load();
 });
 container.querySelector("#today-week-btn").addEventListener("click", () => {
-currentWeekStart = getWeekStart(new Date());
+currentWeekStart = getWeekStart(new Date(), weekStartDay);
 load();
 });
 
@@ -528,7 +529,7 @@ if (!weekCopyTarget.value) {
 weekCopyStatus.textContent = "Bitte ein Zieldatum waehlen.";
 return;
 }
-const targetWeekStart = getWeekStart(new Date(`${weekCopyTarget.value}T00:00:00`));
+const targetWeekStart = getWeekStart(new Date(`${weekCopyTarget.value}T00:00:00`), weekStartDay);
 const targetStartIso = formatDateISO(targetWeekStart);
 weekCopyConfirmBtn.disabled = true;
 weekCopyStatus.textContent = "Kopiere…";
@@ -630,7 +631,7 @@ btn.disabled = true;
 btn.textContent = "Eingeplant…";
 try {
 await addMealPlanEntryForDays(todayIso, recipeId, servings, mealType, 1);
-if (formatDateISO(currentWeekStart) === formatDateISO(getWeekStart(today))) {
+if (formatDateISO(currentWeekStart) === formatDateISO(getWeekStart(today, weekStartDay))) {
 await load();
 }
 } catch (err) {
