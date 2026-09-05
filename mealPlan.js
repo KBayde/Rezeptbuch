@@ -16,6 +16,8 @@ saveMealAsCombination,
 applyCombinationToSlot,
 getSetting,
 markMealPlanEntryCooked,
+getInventoryMatchesForRecipe,
+markInventoryItemUsed,
 } from "./db.js";
 import {
 escapeHtml,
@@ -96,12 +98,33 @@ container.innerHTML = `
         Einkaufsliste aus dieser Woche erstellen
       </button>
     </div>
+
+    <div class="modal-overlay" id="cooked-confirm-modal" hidden>
+      <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="cooked-confirm-title">
+        <div class="modal-header">
+          <h2 id="cooked-confirm-title">Vorrat aktualisieren?</h2>
+          <button type="button" class="modal-close" id="cooked-confirm-close" aria-label="Schließen">✕</button>
+        </div>
+        <p class="text-muted">Diese Zutaten wirklich aufgebraucht?</p>
+        <ul id="cooked-confirm-list" class="cooked-confirm-list"></ul>
+        <div class="cooked-confirm-actions">
+          <button type="button" id="cooked-confirm-skip" class="btn btn-secondary">Ohne Vorrat-Änderung</button>
+          <button type="button" id="cooked-confirm-submit" class="btn btn-primary">Bestätigen</button>
+        </div>
+      </div>
+    </div>
   `;
 
   const planWrap = container.querySelector("#plan-wrap");
 const planEl = container.querySelector("#plan-el");
 const rangeLabel = container.querySelector("#week-range-label");
 const cookedStatus = container.querySelector("#cooked-status");
+const cookedModal = container.querySelector("#cooked-confirm-modal");
+const cookedModalList = container.querySelector("#cooked-confirm-list");
+const cookedModalSkipBtn = container.querySelector("#cooked-confirm-skip");
+const cookedModalSubmitBtn = container.querySelector("#cooked-confirm-submit");
+const cookedModalCloseBtn = container.querySelector("#cooked-confirm-close");
+let pendingCookedEntryId = null;
 const shoppingBtn = container.querySelector("#make-shopping-list-btn");
 const twoDayToggle = container.querySelector("#two-day-toggle");
 const twoDayHint = container.querySelector("#two-day-hint");
@@ -432,11 +455,8 @@ btn.disabled = false;
 });
 });
 
-planEl.querySelectorAll(".meal-entry-cooked").forEach((btn) => {
-btn.addEventListener("click", async () => {
-btn.disabled = true;
-try {
-const result = await markMealPlanEntryCooked(btn.dataset.entryId);
+async function finalizeCooked(entryId) {
+const result = await markMealPlanEntryCooked(entryId);
 if (result.bonusPoints > 0) {
 cookedStatus.textContent = `+${result.bonusPoints} 🦫 Restlos verwertet, bevor's schlecht wurde!`;
 setTimeout(() => {
@@ -444,6 +464,84 @@ cookedStatus.textContent = "";
 }, 4000);
 }
 await load();
+}
+
+function closeCookedModal() {
+cookedModal.hidden = true;
+pendingCookedEntryId = null;
+}
+
+function openCookedModal(entryId, matches) {
+pendingCookedEntryId = entryId;
+cookedModalList.innerHTML = matches
+.map((item) => {
+const amount = [item.quantity, item.unit].filter(Boolean).join(" ");
+return `<li class="cooked-confirm-item">
+<label>
+<input type="checkbox" class="cooked-confirm-checkbox" data-item-id="${item.id}" checked />
+<span>${escapeHtml(item.name)}${amount ? ` <span class="text-muted">(${escapeHtml(amount)})</span>` : ""}</span>
+</label>
+</li>`;
+})
+.join("");
+cookedModal.hidden = false;
+}
+
+function skipCookedModal() {
+const entryId = pendingCookedEntryId;
+closeCookedModal();
+if (entryId) {
+finalizeCooked(entryId).catch((err) => alert("Konnte nicht speichern: " + err.message));
+}
+}
+
+cookedModalSubmitBtn.addEventListener("click", async () => {
+const entryId = pendingCookedEntryId;
+if (!entryId) return;
+cookedModalSubmitBtn.disabled = true;
+cookedModalSkipBtn.disabled = true;
+try {
+const checked = Array.from(cookedModalList.querySelectorAll(".cooked-confirm-checkbox:checked"));
+for (const box of checked) {
+await markInventoryItemUsed(box.dataset.itemId);
+}
+closeCookedModal();
+await finalizeCooked(entryId);
+} catch (err) {
+alert("Konnte Vorrat nicht aktualisieren: " + err.message);
+} finally {
+cookedModalSubmitBtn.disabled = false;
+cookedModalSkipBtn.disabled = false;
+}
+});
+
+cookedModalSkipBtn.addEventListener("click", skipCookedModal);
+cookedModalCloseBtn.addEventListener("click", skipCookedModal);
+cookedModal.addEventListener("click", (e) => {
+if (e.target === cookedModal) skipCookedModal();
+});
+
+planEl.querySelectorAll(".meal-entry-cooked").forEach((btn) => {
+btn.addEventListener("click", async () => {
+const entryId = btn.dataset.entryId;
+const entry = currentEntries.find((e) => String(e.id) === String(entryId));
+if (entry && !entry.cookedAt && entry.recipeId) {
+btn.disabled = true;
+let matches = [];
+try {
+matches = await getInventoryMatchesForRecipe(entry.recipeId);
+} catch {
+matches = [];
+}
+btn.disabled = false;
+if (matches.length > 0) {
+openCookedModal(entryId, matches);
+return;
+}
+}
+btn.disabled = true;
+try {
+await finalizeCooked(entryId);
 } catch (err) {
 alert("Konnte nicht speichern: " + err.message);
 btn.disabled = false;
