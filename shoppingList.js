@@ -9,8 +9,18 @@ clearShoppingList,
     addInventoryItemsBulk,
     updateShoppingListItemPrice,
     getAveragePrice,
+    listInventoryItems,
+    addIngredientSynonym,
+    getPurchaseUnitMap,
+    setIngredientPurchaseUnit,
+    normalizeIngredientName,
 } from "./db.js";
 import { escapeHtml, formatQuantity, formatPrice, categorizeIngredient, CATEGORY_ORDER, unitOptionsHtml, estimateExpiryDate, estimateStorageLocation, categoryOptionsHtml, storageLocationOptionsHtml } from "./utils.js";
+
+// Modul-weite Caches, damit die top-level itemHtml()-Funktion (kein Closure-Zugriff auf
+// renderShoppingList()) trotzdem Vorrats-Namen und gemerkte Einkaufseinheiten kennt.
+let purchaseUnitMap = {};
+let currentVorratItems = [];
 
 // Fragt eine grobe Preis-Schätzung fuer eine Zutat per Anthropic API ab (Fallback,
 // wenn noch keine eigene Preishistorie fuer diese Zutat existiert). Gibt null
@@ -129,7 +139,8 @@ input.addEventListener("blur", async () => {
           ? `<button class="btn btn-secondary btn-small shopping-item-to-inventory" data-item-id="${item.id}" type="button">→ Vorrat</button>`
                 : "";
         const prefillQty = item.quantity !== null ? item.quantity : "";
-        const prefillUnit = item.quantity !== null && item.unit && !item.unit.includes(" ") ? item.unit : "";
+        const legacyPrefillUnit = item.quantity !== null && item.unit && !item.unit.includes(" ") ? item.unit : "";
+        const prefillUnit = purchaseUnitMap[normalizeIngredientName(item.name)] || legacyPrefillUnit;
 
       const actualPriceField = item.checked
           ? `
@@ -167,12 +178,14 @@ input.addEventListener("blur", async () => {
                                                                                                                                                                                                                                                                 </div>
                                                                                                                                                                                                                                                                           <div class="shopping-item-actions">
                                                                                                                                                                                                                                                                                       ${toInventoryBtn}
+        <button type="button" class="btn-ghost btn-tiny item-link-synonym" data-item-id="${item.id}" title="Ist das eigentlich schon im Vorrat, nur anders benannt?">🔗</button>
                                                                                                                                                                                                                                                                                                   <button class="row-remove shopping-item-remove" data-item-id="${item.id}" title="Entfernen" type="button">×</button>
                                                                                                                                                                                                                                                                                                             </div>
                                                                                                                                                                                                                                                                                                                     </div>
                                                                                                                                                                                                                                                                                                                             <form class="inventory-quick-add" data-item-id="${item.id}" hidden>
                                                                                                                                                                                                                                                                                                                                       <input type="number" step="any" min="0" class="qa-quantity" placeholder="Menge" value="${prefillQty}" />
                                                                                                     <select class="qa-unit">${unitOptionsHtml(prefillUnit || "Stück")}</select>
+        <button type="button" class="btn-ghost btn-tiny qa-remember-unit" title="Diese Einheit künftig immer für diese Zutat vorschlagen">📌</button>
                                                                                                     <select class="qa-category">${categoryOptionsHtml(categorizeIngredient(item.name).key)}</select>
                                                                                                     <select class="qa-storage">${storageLocationOptionsHtml(estimateStorageLocation(item.name))}</select>
                                                                                                                                                                                                                                                                                                                                                           <input type="date" class="qa-expiry" title="Mindesthaltbarkeitsdatum (Pflicht)" required />
@@ -298,7 +311,26 @@ ${spontaneousItems.map(itemHtml).join("")}
                           }
                 });
         });
-        list.querySelectorAll(".shopping-item-to-inventory").forEach((btn) => {
+        list.querySelectorAll(".item-link-synonym").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const itemId = btn.dataset.itemId;
+          const sourceItem = currentItems.find((i) => i.id === itemId);
+          if (!sourceItem) return;
+          const vorratNames = [...new Set(currentVorratItems.map((v) => v.name))].sort((a, b) => a.localeCompare(b, "de"));
+          const hint = vorratNames.length > 0 ? `\n\nAktuell im Vorrat: ${vorratNames.join(", ")}` : "";
+          const match = prompt(`Wie genau heißt "${sourceItem.name}" in deinem Vorrat?${hint}`, "");
+          if (!match || !match.trim()) return;
+          try {
+            await addIngredientSynonym(sourceItem.name, match.trim());
+            await deleteShoppingListItem(itemId);
+            alert(`Gemerkt: "${sourceItem.name}" wird ab jetzt wie "${match.trim()}" behandelt und ist von der Liste verschwunden.`);
+            await load();
+          } catch (err) {
+            alert("Konnte nicht gespeichert werden: " + err.message);
+          }
+        });
+      });
+      list.querySelectorAll(".shopping-item-to-inventory").forEach((btn) => {
                 btn.addEventListener("click", () => {
                           const li = btn.closest(".shopping-item");
                           const qaForm = li.querySelector(".inventory-quick-add");
@@ -319,6 +351,23 @@ ${spontaneousItems.map(itemHtml).join("")}
       const sourceItem = currentItems.find((i) => i.id === itemId);
       if (!sourceItem) return;
       qaForm.querySelector(".qa-expiry").value = estimateExpiryDate(sourceItem.name);
+    });
+  }
+  const rememberUnitBtn = qaForm.querySelector(".qa-remember-unit");
+  if (rememberUnitBtn) {
+    rememberUnitBtn.addEventListener("click", async () => {
+      const itemId = qaForm.dataset.itemId;
+      const sourceItem = currentItems.find((i) => i.id === itemId);
+      if (!sourceItem) return;
+      const unit = qaForm.querySelector(".qa-unit").value.trim();
+      if (!unit) return;
+      try {
+        await setIngredientPurchaseUnit(sourceItem.name, unit);
+        alert(`Gemerkt: "${unit}" wird ab jetzt als Einkaufseinheit für "${sourceItem.name}" vorgeschlagen.`);
+        purchaseUnitMap = await getPurchaseUnitMap();
+      } catch (err) {
+        alert("Konnte nicht gespeichert werden: " + err.message);
+      }
     });
   }
   qaForm.addEventListener("submit", async (e) => {
@@ -443,7 +492,8 @@ bulkItemsList.innerHTML = bulkTransferItems
 <li class="receipt-item inventory-photo-item ${!item.expiryDate ? "inventory-photo-item--missing-expiry" : ""}" data-index="${i}">
 <span class="receipt-item-name">${escapeHtml(item.name)}</span>
 <input type="number" step="any" min="0" class="inv-photo-item-qty" data-index="${i}" value="${item.quantity ?? ""}" placeholder="Menge" />
-<select class="inv-photo-item-unit" data-index="${i}">${unitOptionsHtml(item.unit || "Stück")}</select>
+<select class="inv-photo-item-unit" data-index="${i}">${unitOptionsHtml(purchaseUnitMap[normalizeIngredientName(item.name)] || item.unit || "Stück")}</select>
+<button type="button" class="btn-ghost btn-tiny inv-photo-item-remember-unit" data-index="${i}" title="Diese Einheit künftig immer für diese Zutat vorschlagen">📌</button>
 <select class="inv-photo-item-category" data-index="${i}">${categoryOptionsHtml(item.category || "other")}</select>
 <select class="inv-photo-item-storage" data-index="${i}">${storageLocationOptionsHtml(item.storageLocation || "vorrat")}</select>
 <input type="date" class="inv-photo-item-expiry" data-index="${i}" value="${item.expiryDate || ""}" required />
@@ -461,6 +511,22 @@ bulkTransferItems[Number(qtyEl.dataset.index)].quantity = v === "" ? null : Numb
 bulkItemsList.querySelectorAll(".inv-photo-item-unit").forEach((unitEl) => {
 unitEl.addEventListener("change", () => {
 bulkTransferItems[Number(unitEl.dataset.index)].unit = unitEl.value.trim();
+});
+});
+bulkItemsList.querySelectorAll(".inv-photo-item-remember-unit").forEach((btn) => {
+btn.addEventListener("click", async () => {
+const item = bulkTransferItems[Number(btn.dataset.index)];
+if (!item) return;
+const unitEl = bulkItemsList.querySelector(`.inv-photo-item-unit[data-index="${btn.dataset.index}"]`);
+const unit = unitEl ? unitEl.value.trim() : "";
+if (!unit) return;
+try {
+await setIngredientPurchaseUnit(item.name, unit);
+alert(`Gemerkt: "${unit}" wird ab jetzt als Einkaufseinheit für "${item.name}" vorgeschlagen.`);
+purchaseUnitMap = await getPurchaseUnitMap();
+} catch (err) {
+alert("Konnte nicht gespeichert werden: " + err.message);
+}
 });
 });
 bulkItemsList.querySelectorAll(".inv-photo-item-category").forEach((catEl) => {
@@ -545,6 +611,17 @@ bulkStatusEl.textContent = "Fehler: " + err.message;
 bulkConfirmBtn.disabled = false;
 }
 });
+
+  try {
+    currentVorratItems = await listInventoryItems();
+  } catch {
+    currentVorratItems = [];
+  }
+  try {
+    purchaseUnitMap = await getPurchaseUnitMap();
+  } catch {
+    purchaseUnitMap = {};
+  }
 
   await load();
 }
