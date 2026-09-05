@@ -2306,3 +2306,30 @@ color: var(--color-text-muted);
 .modal-close:hover {
   color: var(--color-text);
 }
+
+.cooked-confirm-list {
+list-style: none;
+margin: 0 0 1rem;
+padding: 0;
+display: flex;
+flex-direction: column;
+gap: 0.5rem;
+max-height: 40vh;
+overflow-y: auto;
+}
+
+.cooked-confirm-item label {
+display: flex;
+align-items: center;
+gap: 0.5rem;
+padding: 0.5rem 0.75rem;
+border: 1px solid var(--color-border);
+border-radius: var(--radius-md);
+cursor: pointer;
+}
+
+.cooked-confirm-actions {
+display: flex;
+justify-content: flex-end;
+gap: 0.75rem;
+}
