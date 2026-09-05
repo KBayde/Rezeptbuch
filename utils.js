@@ -86,13 +86,13 @@ export const WEEKDAY_LABELS_DE = [
   "Sonntag",
 ];
 
-/** Liefert den Montag (00:00 lokal) der Woche, in der "date" liegt. */
-export function getWeekStart(date) {
+/** Liefert den Start (00:00 lokal) der Woche, in der "date" liegt. startDay folgt Date.getDay() (0=So..6=Sa), Standard 1=Montag. */
+export function getWeekStart(date, startDay = 1) {
   const d = new Date(date);
   d.setHours(0, 0, 0, 0);
   const day = d.getDay(); // 0 = Sonntag, 1 = Montag, ...
-  const diff = day === 0 ? -6 : 1 - day;
-  d.setDate(d.getDate() + diff);
+  const diff = (day - startDay + 7) % 7;
+  d.setDate(d.getDate() - diff);
   return d;
 }
 
