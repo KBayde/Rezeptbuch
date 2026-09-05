@@ -1586,3 +1586,32 @@ export async function markMealPlanEntryCooked(id) {
 
   return { cooked: true, bonusPoints };
 }
+
+
+/**
+ * Findet alle Vorrats-Posten, deren Name (ggf. via Synonym) zu einer Zutat
+ * des Rezepts passt. Dient als Vorschlagsliste fuer den "gekocht"-Bestaetigungsdialog:
+ * der Nutzer entscheidet bewusst, welche Posten wirklich aufgebraucht sind - kein
+ * stiller Automatismus (z.B. Olivenoel: Rezept braucht 3 EL, Vorrat hat eine ganze
+ * Flasche - die ist danach nicht automatisch leer).
+ */
+export async function getInventoryMatchesForRecipe(recipeId) {
+  const [recipe, inventoryItems, synonyms] = await Promise.all([
+    getRecipe(recipeId),
+    listInventoryItems(),
+    listIngredientSynonyms(),
+  ]);
+  if (!recipe || !recipe.ingredients) return [];
+  const matched = [];
+  const seenIds = new Set();
+  for (const ing of recipe.ingredients) {
+    for (const item of inventoryItems) {
+      if (seenIds.has(item.id)) continue;
+      if (namesMatchWithSynonyms(ing.ingredientName, item.name, synonyms)) {
+        seenIds.add(item.id);
+        matched.push(item);
+      }
+    }
+  }
+  return matched;
+}
