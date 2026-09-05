@@ -990,16 +990,18 @@ export async function generateShoppingList(startDate, endDate) {
   // Wochenplan-Vorschlaegen aus dem Vorrat), da Vorrats- und Rezept-Einheiten
   // sich nicht zuverlaessig genug vergleichen lassen.
   let vorratItems = [];
+  let ingredientSynonyms = [];
   try {
-    vorratItems = await listInventoryItems();
+    [vorratItems, ingredientSynonyms] = await Promise.all([listInventoryItems(), listIngredientSynonyms()]);
   } catch {
     vorratItems = [];
+    ingredientSynonyms = [];
   }
   const skipped = [];
   const finalItems = vorratItems.length === 0
     ? items
     : items.filter((it) => {
-        const inStock = vorratItems.some((v) => ingredientNamesMatch(normalizeIngredientName(it.name), normalizeIngredientName(v.name)));
+        const inStock = vorratItems.some((v) => namesMatchWithSynonyms(it.name, v.name, ingredientSynonyms));
         if (inStock) skipped.push(it.name);
         return !inStock;
       });
@@ -1342,8 +1344,50 @@ export function ingredientNamesMatch(a, b) {
     return a.length >= 3 && b.length >= 3 && (a.includes(b) || b.includes(a));
 }
 
+/** Laedt alle bekannten Synonym-Paare (z. B. "Parmesan" <-> "Grana Padano"), normalisiert. */
+export async function listIngredientSynonyms() {
+  const { data, error } = await supabase.from("ingredient_synonyms").select("*").eq("workspace", currentWorkspace);
+  if (error) throw error;
+  return data.map((row) => ({ nameA: normalizeIngredientName(row.name_a), nameB: normalizeIngredientName(row.name_b) }));
+}
+
+/** Merkt sich, dass zwei Namen dieselbe Zutat meinen (z. B. Rezept-Name "Parmesan" und Vorrats-Name "Grana Padano"). */
+export async function addIngredientSynonym(nameA, nameB) {
+  const a = normalizeIngredientName(nameA);
+  const b = normalizeIngredientName(nameB);
+  if (!a || !b || a === b) return;
+  const { error } = await supabase.from("ingredient_synonyms").insert({ name_a: a, name_b: b, workspace: currentWorkspace });
+  if (error) throw error;
+}
+
+/** Wie ingredientNamesMatch, prueft zusaetzlich bekannte Synonym-Paare aus der uebergebenen Liste. */
+export function namesMatchWithSynonyms(a, b, synonyms) {
+  const na = normalizeIngredientName(a);
+  const nb = normalizeIngredientName(b);
+  if (ingredientNamesMatch(na, nb)) return true;
+  return (synonyms || []).some((s) => (s.nameA === na && s.nameB === nb) || (s.nameA === nb && s.nameB === na));
+}
+
+/** Liefert alle hinterlegten "typischen Einkaufseinheiten" (z. B. "Flasche" fuer Olivenoel) als Map: normalisierter Zutatname -> Einheit. */
+export async function getPurchaseUnitMap() {
+  const { data, error } = await supabase.from("ingredients").select("name, purchase_unit").not("purchase_unit", "is", null);
+  if (error) throw error;
+  const map = {};
+  for (const row of data) {
+    map[normalizeIngredientName(row.name)] = row.purchase_unit;
+  }
+  return map;
+}
+
+/** Merkt sich die typische Einkaufseinheit fuer eine Zutat (z. B. "Flasche" fuer Olivenoel) - legt die Zutat bei Bedarf an. */
+export async function setIngredientPurchaseUnit(name, unit) {
+  const ingredient = await getOrCreateIngredient(name);
+  const { error } = await supabase.from("ingredients").update({ purchase_unit: unit }).eq("id", ingredient.id);
+  if (error) throw error;
+}
+
 export async function suggestRecipesFromInventory(limit = 6) {
-    const [inventory, recipes] = await Promise.all([listInventoryItems(), listRecipes()]);
+    const [inventory, recipes, ingredientSynonyms] = await Promise.all([listInventoryItems(), listRecipes(), listIngredientSynonyms()]);
     if (inventory.length === 0 || recipes.length === 0) return [];
 
     const soonLimit = new Date();
@@ -1362,7 +1406,7 @@ export async function suggestRecipesFromInventory(limit = 6) {
           for (const ing of recipe.ingredients) {
                   const ingName = normalizeIngredientName(ing.ingredientName);
                   if (!ingName) continue;
-                  const hit = inventoryEntries.find((inv) => ingredientNamesMatch(inv.name, ingName));
+                  const hit = inventoryEntries.find((inv) => namesMatchWithSynonyms(inv.name, ingName, ingredientSynonyms));
                   if (hit) {
                             matchedIngredients.push(ing.ingredientName);
                             if (hit.expiringSoon) expiringMatchedCount++;
@@ -1517,12 +1561,12 @@ export async function markMealPlanEntryCooked(id) {
   let bonusPoints = 0;
   if (entry.recipe_id) {
     try {
-      const [recipe, expiring] = await Promise.all([getRecipe(entry.recipe_id), getExpiringInventoryItems(4)]);
+      const [recipe, expiring, ingredientSynonyms] = await Promise.all([getRecipe(entry.recipe_id), getExpiringInventoryItems(4), listIngredientSynonyms()]);
       const expiringNames = expiring.map((i) => normalizeIngredientName(i.name));
       let matchCount = 0;
       for (const ing of recipe.ingredients) {
         const ingName = normalizeIngredientName(ing.ingredientName);
-        if (expiringNames.some((n) => ingredientNamesMatch(n, ingName))) matchCount++;
+        if (expiringNames.some((n) => namesMatchWithSynonyms(n, ingName, ingredientSynonyms))) matchCount++;
       }
       if (matchCount > 0) {
         bonusPoints = 15 * Math.min(3, matchCount);
