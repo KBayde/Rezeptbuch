@@ -570,7 +570,7 @@ const toInventoryBtn = item.checked
       });
       list.querySelectorAll(".shopping-item-to-inventory").forEach((btn) => {
                 btn.addEventListener("click", () => {
-                          const li = btn.closest(".shopping-item");
+                          const li = btn.closest(".shopping-tile");
                           const qaForm = li.querySelector(".inventory-quick-add");
                           qaForm.hidden = !qaForm.hidden;
                           if (!qaForm.hidden) qaForm.querySelector(".qa-quantity").focus();
