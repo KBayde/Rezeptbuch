@@ -244,7 +244,7 @@ const CATEGORY_RULES = [
     label: "Obst & Gemüse",
     icon: "🥬",
     keywords: [
-      "apfel", "banane", "tomate", "salat", "gurke", "zwiebel", "knoblauch",
+      "apfel", "äpfel", "banane", "tomate", "salat", "gurke", "zwiebel", "knoblauch",
       "kartoffel", "karotte", "möhre", "paprika", "zucchini", "pilz",
       "champignon", "spinat", "brokkoli", "rucola", "zitrone", "limette",
       "avocado", "ingwer", "chili", "kohl", "lauch", "sellerie", "radieschen",
