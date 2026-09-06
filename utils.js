@@ -296,7 +296,11 @@ const CATEGORY_RULES = [
 const OTHER_CATEGORY = { key: "other", label: "Sonstiges", icon: "🛒" };
 
 /** Anzeigereihenfolge der Kategorien (inkl. "Sonstiges" als letzte Gruppe). */
-export const CATEGORY_ORDER = [...CATEGORY_RULES.map((c) => c.key), OTHER_CATEGORY.key];
+// Anzeigereihenfolge folgt der typischen Ladenroute (Obst/Gemuese -> Backwaren ->
+// Kuehlregal -> Fleisch/Fisch -> Tiefkuehl -> Trockenwaren -> Gewuerze -> Getraenke),
+// unabhaengig von der Reihenfolge in CATEGORY_RULES (die steuert nur, welche
+// Kategorie bei mehrdeutigen Stichwoertern gewinnt). "Sonstiges" bleibt immer letzte Gruppe.
+export const CATEGORY_ORDER = ["produce", "bakery", "dairy", "meat", "frozen", "pantry", "spices", "beverages", OTHER_CATEGORY.key];
 
 /** Anzeigeinfos (Label + Icon) je Kategorie-Schlüssel, für Dropdowns/Badges im Vorrat. */
 export const CATEGORY_INFO = Object.fromEntries([
