@@ -23,6 +23,135 @@ import { escapeHtml, formatQuantity, formatPrice, categorizeIngredient, CATEGORY
 let purchaseUnitMap = {};
 let currentVorratItems = [];
 
+// --------------------------- Offline-Faehigkeit (Einkaufsliste) ---------------------------
+//
+// Bei fehlender Verbindung soll Abhaken nicht mit einer Fehlermeldung
+// zurueckgerollt werden, sondern lokal bestehen bleiben und automatisch
+// nachgeholt werden, sobald wieder online. Dafuer: (1) letzter bekannter
+// Listenstand in localStorage, damit die Seite auch offline mit Inhalt
+// startet, (2) eine Warteschlange in localStorage fuer Aenderungen, die wegen
+// fehlender Verbindung nicht sofort gespeichert werden konnten, (3) Auto-Sync
+// bei Wiederverbindung (online-Event und Sichtbarwerden der Seite).
+const SHOPPING_CACHE_KEY = "clevulo-shoppinglist-cache";
+const OFFLINE_QUEUE_KEY = "clevulo-shoppinglist-queue";
+
+let pendingSyncItemIds = new Set(readOfflineQueue().map((a) => a.itemId));
+let currentLoadFn = null; // Zeiger auf load() der aktuell gemounteten Ansicht (fuer Auto-Sync-Reload).
+let offlineSyncWired = false;
+let offlineSyncInFlight = false;
+
+function readCachedShoppingList() {
+  try {
+    const raw = localStorage.getItem(SHOPPING_CACHE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeCachedShoppingList(items) {
+  try {
+    localStorage.setItem(SHOPPING_CACHE_KEY, JSON.stringify(items));
+  } catch {
+  }
+}
+
+function readOfflineQueue() {
+  try {
+    const raw = localStorage.getItem(OFFLINE_QUEUE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeOfflineQueue(queue) {
+  try {
+    localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(queue));
+  } catch {
+  }
+  pendingSyncItemIds = new Set(queue.map((a) => a.itemId));
+  updateOfflineBanner();
+}
+
+function enqueueOfflineAction(action) {
+  const queue = readOfflineQueue();
+  queue.push({ ...action, timestamp: Date.now() });
+  writeOfflineQueue(queue);
+}
+
+/**
+ * Grobe, aber praxistaugliche Unterscheidung zwischen "echtem" Fehler (z. B.
+ * Server lehnt ab, Datensatz existiert nicht mehr) und fehlender Verbindung:
+ * navigator.onLine sowie typische Netzwerkfehler-Meldungen von fetch().
+ */
+function isNetworkError(err) {
+  if (typeof navigator !== "undefined" && navigator.onLine === false) return true;
+  const msg = String((err && err.message) || err || "").toLowerCase();
+  return /failed to fetch|networkerror|network request failed|load failed|network error|internet disconnected/.test(msg);
+}
+
+function updateOfflineBanner() {
+  const banner = document.getElementById("offline-banner");
+  if (!banner) return;
+  const count = readOfflineQueue().length;
+  const countEl = document.getElementById("offline-banner-count");
+  banner.hidden = count === 0;
+  if (countEl) countEl.textContent = String(count);
+}
+
+/**
+ * Arbeitet die Warteschlange der Reihe nach ab, sobald wieder online. Bei
+ * Erfolg wird die Aktion entfernt; bei erneutem "echten" Fehler (z. B. Posten
+ * wurde inzwischen woanders geloescht) wird sie verworfen statt endlos
+ * wiederholt. Netzwerkfehler lassen die Aktion in der Warteschlange stehen
+ * (naechster Versuch beim naechsten online-Event/Sichtbarwerden).
+ */
+async function flushOfflineQueue() {
+  if (offlineSyncInFlight) return;
+  const queue = readOfflineQueue();
+  if (queue.length === 0) return;
+  if (typeof navigator !== "undefined" && navigator.onLine === false) return;
+  offlineSyncInFlight = true;
+  try {
+    const remaining = [];
+    let hadNetworkFailure = false;
+    for (const action of queue) {
+      try {
+        if (action.type === "toggle") {
+          await toggleShoppingListItem(action.itemId, action.checked);
+        } else if (action.type === "updateNote") {
+          await updateShoppingListItemNote(action.itemId, action.note);
+        }
+      } catch (err) {
+        if (isNetworkError(err)) {
+          remaining.push(action);
+          hadNetworkFailure = true;
+        }
+        // "Echte" Fehler (z. B. Posten existiert nicht mehr): Aktion bewusst
+        // verwerfen statt endlos zu wiederholen.
+      }
+    }
+    writeOfflineQueue(remaining);
+    if (!hadNetworkFailure && typeof currentLoadFn === "function") {
+      await currentLoadFn();
+    }
+  } finally {
+    offlineSyncInFlight = false;
+  }
+}
+
+function setupOfflineSync() {
+  if (offlineSyncWired) return;
+  offlineSyncWired = true;
+  window.addEventListener("online", () => {
+    flushOfflineQueue();
+  });
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") flushOfflineQueue();
+  });
+}
+
 // Fragt eine grobe Preis-Schätzung fuer eine Zutat per Anthropic API ab (Fallback,
 // wenn noch keine eigene Preishistorie fuer diese Zutat existiert). Gibt null
 // zurueck statt zu werfen, damit ein Fehlschlag die Eingabe nicht blockiert.
@@ -51,7 +180,9 @@ export async function renderShoppingList(container) {
                                                   <a href="#/wochenplan" class="btn btn-secondary">← Zum Wochenplan</a>
                                                       </div>
 
-                                                          <form id="add-item-form" class="toolbar">
+                                                          <div id="offline-banner" class="offline-banner" hidden>📡 Offline – Änderungen werden gespeichert und automatisch synchronisiert, sobald du wieder online bist. (<span id="offline-banner-count">0</span>)</div>
+
+      <form id="add-item-form" class="toolbar">
                                                                 <input type="text" id="add-item-input" class="search-input" placeholder="Weiteres Element hinzufügen…" />
                                                                       <input
                                                                               type="number" id="add-item-price" class="price-input-add"
@@ -136,7 +267,10 @@ input.addEventListener("blur", async () => {
         : item.unit
         ? escapeHtml(item.unit)
         : "";
-    const toInventoryBtn = item.checked
+    const pendingSyncBadge = pendingSyncItemIds.has(item.id)
+  ? '<span class="shopping-tile-sync-badge" title="Offline geändert – wird synchronisiert, sobald wieder online">📡</span>'
+  : "";
+const toInventoryBtn = item.checked
       ? `<button class="btn btn-secondary btn-small shopping-item-to-inventory" data-item-id="${item.id}" type="button">→ Vorrat</button>`
       : "";
     const prefillQty = item.quantity !== null ? item.quantity : "";
@@ -165,7 +299,7 @@ input.addEventListener("blur", async () => {
             type="button" class="shopping-tile-checkbox ${item.checked ? "shopping-tile-checkbox--checked" : ""}"
             data-item-id="${item.id}" aria-pressed="${item.checked ? "true" : "false"}"
             title="${item.checked ? "Zurück auf die Liste" : "Abhaken"}"
-          >${item.checked ? "✓" : ""}</button>
+          >${item.checked ? "✓" : ""}</button>${pendingSyncBadge}
           <span class="shopping-tile-icon" title="${escapeHtml(cat.label)}">${cat.icon}</span>
           <div class="shopping-tile-info">
             <span class="shopping-tile-name">${escapeHtml(item.name)}</span>
@@ -284,9 +418,14 @@ input.addEventListener("blur", async () => {
         try {
           await toggleShoppingListItem(id, item.checked);
         } catch (err) {
+          if (isNetworkError(err)) {
+          enqueueOfflineAction({ type: "toggle", itemId: id, checked: item.checked });
+          renderList();
+        } else {
           item.checked = previousChecked;
           renderList();
           alert("Konnte nicht speichern: " + err.message);
+        }
         }
       });
     });
@@ -315,7 +454,13 @@ input.addEventListener("blur", async () => {
           item.note = trimmed === "" ? null : trimmed;
           renderList();
         } catch (err) {
+          if (isNetworkError(err)) {
+          item.note = trimmed === "" ? null : trimmed;
+          enqueueOfflineAction({ type: "updateNote", itemId: id, note: trimmed === "" ? null : trimmed });
+          renderList();
+        } else {
           alert("Notiz konnte nicht gespeichert werden: " + err.message);
+        }
         }
       });
     });
@@ -502,22 +647,33 @@ return;
   }
 
   async function load() {
-    list.innerHTML = `<p class="text-muted">Lade…</p>`;
-    let items = [];
-    try {
-      items = await listShoppingListItems();
-    } catch (err) {
-      list.innerHTML = `<p class="form-error">Liste konnte nicht geladen werden: ${escapeHtml(
-        err.message
-      )}</p>`;
-      return;
+  list.innerHTML = `<p class="text-muted">Lade…</p>`;
+  let items = [];
+  try {
+    items = await listShoppingListItems();
+    writeCachedShoppingList(items);
+  } catch (err) {
+    if (isNetworkError(err)) {
+      const cached = readCachedShoppingList();
+      if (cached) {
+        currentItems = cached;
+        renderList();
+        updateOfflineBanner();
+        return;
+      }
     }
-
-    currentItems = items;
-    renderList();
+    list.innerHTML = `<p class="form-error">Liste konnte nicht geladen werden: ${escapeHtml(
+      err.message
+    )}</p>`;
+    return;
   }
 
-  form.addEventListener("submit", async (e) => {
+  currentItems = items;
+  renderList();
+  updateOfflineBanner();
+}
+
+form.addEventListener("submit", async (e) => {
         e.preventDefault();
         const name = input.value.trim();
         if (!name) return;
@@ -700,4 +856,9 @@ bulkConfirmBtn.disabled = false;
   }
 
   await load();
+
+  currentLoadFn = load;
+  setupOfflineSync();
+  updateOfflineBanner();
+  flushOfflineQueue();
 }
