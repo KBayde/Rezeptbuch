@@ -953,13 +953,75 @@ export async function generateShoppingList(startDate, endDate) {
   if (fetchError) throw fetchError;
 
   const recipesById = new Map(recipeRows.map((r) => [r.id, r]));
-  // Zutaten werden zuerst nur nach NAME gruppiert (nicht mehr nach
-  // Name+Einheit) – die konkreten Mengen/Einheiten sammeln sich in
-  // "subgroups" darunter und werden erst danach zusammengeführt.
-  const byName = new Map(); // nameLower -> { name, subgroups: Map(subKey -> {quantity, unit, canonical}) }
+  // Zutaten werden per Fuzzy-Namensabgleich zusammengefasst (derselbe Abgleich
+  // wie beim Vorrat-Abgleich: Substring-Match ab 3 Zeichen + manuell verknuepfte
+  // Synonyme aus namesMatchWithSynonyms), damit z. B. "Äpfel" und "rote Äpfel"
+  // als EINE Zutat gelten statt als zwei separate Zeilen (ein reiner exakter
+  // Namensvergleich wuerde das verpassen).
+  let ingredientSynonyms = [];
+  try {
+    ingredientSynonyms = await listIngredientSynonyms();
+  } catch {
+    ingredientSynonyms = [];
+  }
+  const groups = []; // Array<{ name, subgroups: Map(subKey -> {quantity, unit, canonical}) }>
+  function findOrCreateGroup(rawName) {
+    const existing = groups.find((g) => namesMatchWithSynonyms(g.name, rawName, ingredientSynonyms));
+    if (existing) return existing;
+    const created = { name: rawName, subgroups: new Map() };
+    groups.push(created);
+    return created;
+  }
 
-  for (const entry of entries) { const recipe = recipesById.get(entry.recipeId); if (!recipe) continue; const base = Number(recipe.servings_base) || 1; const ratio = entry.servings / base; for (const ri of recipe.recipe_ingredients) { const name = ri.ingredients?.name?.trim(); if (!name) continue; const nameKey = name.toLowerCase(); const rawUnit = ri.units?.abbreviation || ""; if (!byName.has(nameKey)) byName.set(nameKey, { name, subgroups: new Map() }); const group = byName.get(nameKey); if (ri.quantity === null) { const subKey = `text|${rawUnit}`; if (!group.subgroups.has(subKey)) { group.subgroups.set(subKey, { quantity: null, unit: rawUnit }); } continue; } const scaled = Number(ri.quantity) * ratio; const conversion = UNIT_CONVERSIONS[rawUnit]; if (conversion) { const subKey = `unit|${conversion.canonical}`; const amount = scaled * conversion.factor; const existing = group.subgroups.get(subKey); if (existing) { existing.quantity += amount; } else { group.subgroups.set(subKey, { quantity: amount, unit: conversion.canonical, canonical: true }); } } else { const subKey = `unit|${rawUnit}`; const existing = group.subgroups.get(subKey); if (existing) { existing.quantity += scaled; } else { group.subgroups.set(subKey, { quantity: scaled, unit: rawUnit }); } } } } for (const entry of entries) { if (entry.recipeId || !entry.isCustom) continue; const rawName = (entry.recipeTitle || "").trim(); if (!rawName) continue; const nameKey = rawName.toLowerCase(); if (!byName.has(nameKey)) byName.set(nameKey, { name: rawName, subgroups: new Map() }); const group = byName.get(nameKey); const subKey = "text|custom"; if (!group.subgroups.has(subKey)) group.subgroups.set(subKey, { quantity: null, unit: "" }); } const items = [];
-  for (const { name, subgroups } of byName.values()) {
+  for (const entry of entries) {
+    const recipe = recipesById.get(entry.recipeId);
+    if (!recipe) continue;
+    const base = Number(recipe.servings_base) || 1;
+    const ratio = entry.servings / base;
+    for (const ri of recipe.recipe_ingredients) {
+      const name = ri.ingredients?.name?.trim();
+      if (!name) continue;
+      const rawUnit = ri.units?.abbreviation || "";
+      const group = findOrCreateGroup(name);
+      if (ri.quantity === null) {
+        const subKey = `text|${rawUnit}`;
+        if (!group.subgroups.has(subKey)) {
+          group.subgroups.set(subKey, { quantity: null, unit: rawUnit });
+        }
+        continue;
+      }
+      const scaled = Number(ri.quantity) * ratio;
+      const conversion = UNIT_CONVERSIONS[rawUnit];
+      if (conversion) {
+        const subKey = `unit|${conversion.canonical}`;
+        const amount = scaled * conversion.factor;
+        const existing = group.subgroups.get(subKey);
+        if (existing) {
+          existing.quantity += amount;
+        } else {
+          group.subgroups.set(subKey, { quantity: amount, unit: conversion.canonical, canonical: true });
+        }
+      } else {
+        const subKey = `unit|${rawUnit}`;
+        const existing = group.subgroups.get(subKey);
+        if (existing) {
+          existing.quantity += scaled;
+        } else {
+          group.subgroups.set(subKey, { quantity: scaled, unit: rawUnit });
+        }
+      }
+    }
+  }
+  for (const entry of entries) {
+    if (entry.recipeId || !entry.isCustom) continue;
+    const rawName = (entry.recipeTitle || "").trim();
+    if (!rawName) continue;
+    const group = findOrCreateGroup(rawName);
+    const subKey = "text|custom";
+    if (!group.subgroups.has(subKey)) group.subgroups.set(subKey, { quantity: null, unit: "" });
+  }
+  const items = [];
+  for (const { name, subgroups } of groups) {
     const parts = [...subgroups.values()].map((sg) => {
       if (sg.quantity === null) return { quantity: null, unit: sg.unit || "" };
       const human = sg.canonical ? humanizeCanonicalAmount(sg.unit, sg.quantity) : { quantity: sg.quantity, unit: sg.unit };
@@ -990,12 +1052,10 @@ export async function generateShoppingList(startDate, endDate) {
   // Wochenplan-Vorschlaegen aus dem Vorrat), da Vorrats- und Rezept-Einheiten
   // sich nicht zuverlaessig genug vergleichen lassen.
   let vorratItems = [];
-  let ingredientSynonyms = [];
   try {
-    [vorratItems, ingredientSynonyms] = await Promise.all([listInventoryItems(), listIngredientSynonyms()]);
+    vorratItems = await listInventoryItems();
   } catch {
     vorratItems = [];
-    ingredientSynonyms = [];
   }
   const skipped = [];
   const finalItems = vorratItems.length === 0
