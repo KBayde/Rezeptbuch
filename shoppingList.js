@@ -1,6 +1,7 @@
 import {
     listShoppingListItems,
     addShoppingListItem,
+    addPurchasedShoppingListItem,
     toggleShoppingListItem,
     deleteShoppingListItem,
     clearCheckedShoppingListItems,
@@ -191,7 +192,20 @@ export async function renderShoppingList(container) {
                                                                                                   <button type="submit" class="btn btn-primary">+ Hinzufügen</button>
                                                                                                       </form>
                                                                                                       
-                                                                                                    <div class="card shopping-summary-card" id="shopping-summary-card">
+                                                                                                    <div class="spontaneous-quick-add">
+<button type="button" id="spontaneous-toggle-btn" class="btn btn-secondary btn-small">🎲 Spontankauf erfassen</button>
+<form id="spontaneous-form" class="toolbar" hidden>
+<input type="text" id="spontaneous-input" class="search-input" placeholder="Was hast du spontan gekauft?" />
+<input
+type="number" id="spontaneous-price" class="price-input-add"
+step="0.01" min="0" placeholder="€ bezahlt"
+/>
+<button type="submit" class="btn btn-primary">Erfassen</button>
+<button type="button" id="spontaneous-cancel-btn" class="btn btn-ghost">Abbrechen</button>
+</form>
+</div>
+
+<div class="card shopping-summary-card" id="shopping-summary-card">
                                                                                                               <div>
                                                                                                                           <p class="text-muted">Geplante Summe</p>
                                                                                                                                       <p class="shopping-summary-total" id="shopping-summary-total"></p>
@@ -233,6 +247,11 @@ export async function renderShoppingList(container) {
     const moveCheckedBtn = container.querySelector("#move-checked-to-inventory-btn");
     const clearCheckedBtn = container.querySelector("#clear-checked-btn");
 const clearAllBtn = container.querySelector("#clear-all-btn");
+const spontaneousToggleBtn = container.querySelector("#spontaneous-toggle-btn");
+const spontaneousForm = container.querySelector("#spontaneous-form");
+const spontaneousInput = container.querySelector("#spontaneous-input");
+const spontaneousPriceInput = container.querySelector("#spontaneous-price");
+const spontaneousCancelBtn = container.querySelector("#spontaneous-cancel-btn");
 
   let currentItems = [];
 
@@ -270,6 +289,9 @@ input.addEventListener("blur", async () => {
     const pendingSyncBadge = pendingSyncItemIds.has(item.id)
   ? '<span class="shopping-tile-sync-badge" title="Offline geändert – wird synchronisiert, sobald wieder online">📡</span>'
   : "";
+const spontaneousBadge = item.source === "receipt_spontaneous"
+? '<span class="shopping-tile-spontaneous-badge" title="Spontankauf">🎲</span>'
+: "";
 const toInventoryBtn = item.checked
       ? `<button class="btn btn-secondary btn-small shopping-item-to-inventory" data-item-id="${item.id}" type="button">→ Vorrat</button>`
       : "";
@@ -299,7 +321,7 @@ const toInventoryBtn = item.checked
             type="button" class="shopping-tile-checkbox ${item.checked ? "shopping-tile-checkbox--checked" : ""}"
             data-item-id="${item.id}" aria-pressed="${item.checked ? "true" : "false"}"
             title="${item.checked ? "Zurück auf die Liste" : "Abhaken"}"
-          >${item.checked ? "✓" : ""}</button>${pendingSyncBadge}
+          >${item.checked ? "✓" : ""}</button>${pendingSyncBadge}${spontaneousBadge}
           <span class="shopping-tile-icon" title="${escapeHtml(cat.label)}">${cat.icon}</span>
           <div class="shopping-tile-info">
             <span class="shopping-tile-name">${escapeHtml(item.name)}</span>
@@ -689,7 +711,39 @@ form.addEventListener("submit", async (e) => {
         }
   });
 
-  clearCheckedBtn.addEventListener("click", async () => {
+  spontaneousToggleBtn.addEventListener("click", () => {
+spontaneousForm.hidden = !spontaneousForm.hidden;
+if (!spontaneousForm.hidden) spontaneousInput.focus();
+});
+
+spontaneousCancelBtn.addEventListener("click", () => {
+spontaneousForm.hidden = true;
+spontaneousInput.value = "";
+spontaneousPriceInput.value = "";
+});
+
+spontaneousForm.addEventListener("submit", async (e) => {
+e.preventDefault();
+const name = spontaneousInput.value.trim();
+if (!name) return;
+const priceRaw = spontaneousPriceInput.value.trim();
+const price = priceRaw === "" ? null : Number(priceRaw);
+const submitBtn = spontaneousForm.querySelector("button[type=submit]");
+submitBtn.disabled = true;
+try {
+await addPurchasedShoppingListItem(name, price, true);
+spontaneousInput.value = "";
+spontaneousPriceInput.value = "";
+spontaneousForm.hidden = true;
+await load();
+} catch (err) {
+alert("Spontankauf konnte nicht erfasst werden: " + err.message);
+} finally {
+submitBtn.disabled = false;
+}
+});
+
+clearCheckedBtn.addEventListener("click", async () => {
         try {
                 await clearCheckedShoppingListItems();
                 await load();
