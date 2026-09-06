@@ -808,6 +808,7 @@ return data.map((row) => ({
       source: row.source,
       plannedPrice: row.planned_price === null || row.planned_price === undefined ? null : Number(row.planned_price),
       actualPrice: row.actual_price === null || row.actual_price === undefined ? null : Number(row.actual_price),
+  note: row.note ?? null,
 }));
 }
 
@@ -841,6 +842,12 @@ export async function updateShoppingListItemPrice(id, changes = {}) {
   if ("actualPrice" in changes) payload.actual_price = changes.actualPrice;
   if (Object.keys(payload).length === 0) return;
   const { error } = await supabase.from("shopping_list_items").update(payload).eq("id", id);
+  if (error) throw error;
+}
+
+/** Setzt/aktualisiert die Alternativ-Artikel-Notiz eines Postens (z. B. "Fusilli statt Spaghetti gekauft"). note = null loescht die Notiz. */
+export async function updateShoppingListItemNote(id, note) {
+  const { error } = await supabase.from("shopping_list_items").update({ note: note || null }).eq("id", id);
   if (error) throw error;
 }
 
