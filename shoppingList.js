@@ -8,6 +8,7 @@ clearShoppingList,
     addInventoryItem,
     addInventoryItemsBulk,
     updateShoppingListItemPrice,
+    updateShoppingListItemNote,
     getAveragePrice,
     listInventoryItems,
     addIngredientSynonym,
@@ -128,143 +129,213 @@ input.addEventListener("blur", async () => {
 });
 
   function itemHtml(item) {
-        const cat = categorizeIngredient(item.name);
-        const qtyLabel =
-                item.quantity !== null
-            ? `${formatQuantity(item.quantity)}${item.unit ? " " + escapeHtml(item.unit) : ""}`
-                  : item.unit
-            ? escapeHtml(item.unit)
-                  : "";
-        const toInventoryBtn = item.checked
-          ? `<button class="btn btn-secondary btn-small shopping-item-to-inventory" data-item-id="${item.id}" type="button">→ Vorrat</button>`
-                : "";
-        const prefillQty = item.quantity !== null ? item.quantity : "";
-        const legacyPrefillUnit = item.quantity !== null && item.unit && !item.unit.includes(" ") ? item.unit : "";
-        const prefillUnit = purchaseUnitMap[normalizeIngredientName(item.name)] || legacyPrefillUnit;
+    const cat = categorizeIngredient(item.name);
+    const qtyLabel =
+      item.quantity !== null
+        ? `${formatQuantity(item.quantity)}${item.unit ? " " + escapeHtml(item.unit) : ""}`
+        : item.unit
+        ? escapeHtml(item.unit)
+        : "";
+    const toInventoryBtn = item.checked
+      ? `<button class="btn btn-secondary btn-small shopping-item-to-inventory" data-item-id="${item.id}" type="button">→ Vorrat</button>`
+      : "";
+    const prefillQty = item.quantity !== null ? item.quantity : "";
+    const legacyPrefillUnit = item.quantity !== null && item.unit && !item.unit.includes(" ") ? item.unit : "";
+    const prefillUnit = purchaseUnitMap[normalizeIngredientName(item.name)] || legacyPrefillUnit;
 
-      const actualPriceField = item.checked
-          ? `
-                  <label class="price-field price-field--actual" title="Tatsächlich bezahlt">
-                            <input
-                                        type="number" step="0.01" min="0" class="price-input price-input--actual"
-                                                    data-item-id="${item.id}" value="${item.actualPrice ?? ""}" placeholder="bezahlt"
-                                                              />
-                                                                        <span class="price-field-suffix">€</span>
-                                                                                </label>`
-              : "";
+    const actualPriceField = item.checked
+      ? `
+      <label class="price-field price-field--actual" title="Tatsächlich bezahlt">
+        <input
+          type="number" step="0.01" min="0" class="price-input price-input--actual"
+          data-item-id="${item.id}" value="${item.actualPrice ?? ""}" placeholder="bezahlt"
+        />
+        <span class="price-field-suffix">€</span>
+      </label>`
+      : "";
 
-      return `
-            <li class="shopping-item ${item.checked ? "shopping-item--checked" : ""}" data-item-id="${item.id}">
-                    <div class="shopping-item-row">
-                              <span class="shopping-item-icon" title="${escapeHtml(cat.label)}">${cat.icon}</span>
-                                        <label class="shopping-item-label">
-                                                    <input
-                                                                  type="checkbox" class="shopping-item-checkbox"
-                                                                                data-item-id="${item.id}" ${item.checked ? "checked" : ""}
-                                                                                            />
-                                                                                                        <span class="shopping-item-qty">${qtyLabel}</span>
-                                                                                                                    <span class="shopping-item-name">${escapeHtml(item.name)}</span>
-                                                                                                                              </label>
-                                                                                                                                        <div class="shopping-item-prices">
-                                                                                                                                                    <label class="price-field price-field--planned" title="Geplanter Preis">
-                                                                                                                                                                  <input
-                                                                                                                                                                                  type="number" step="0.01" min="0" class="price-input price-input--planned"
-                                                                                                                                                                                                  data-item-id="${item.id}" value="${item.plannedPrice ?? ""}" placeholder="geplant"
-                                                                                                                                                                                                                />
-                                                                                                                                                                                                                              <span class="price-field-suffix">€</span>
-                                                                                                                                                                                                                                          </label>
-                                                                                                                                                                                                                                          ${item.plannedPrice === null ? `<button type="button" class="btn-ghost btn-tiny price-ai-btn" data-item-id="${item.id}" data-name="${escapeHtml(item.name)}" title="Preis per KI schätzen">🤖</button>` : ""}
-                                                                                                                                                                                                                                                      ${actualPriceField}
-                                                                                                                                                                                                                                                                </div>
-                                                                                                                                                                                                                                                                          <div class="shopping-item-actions">
-                                                                                                                                                                                                                                                                                      ${toInventoryBtn}
-        <button type="button" class="btn-ghost btn-tiny item-link-synonym" data-item-id="${item.id}" title="Ist das eigentlich schon im Vorrat, nur anders benannt?">🔗</button>
-                                                                                                                                                                                                                                                                                                  <button class="row-remove shopping-item-remove" data-item-id="${item.id}" title="Entfernen" type="button">×</button>
-                                                                                                                                                                                                                                                                                                            </div>
-                                                                                                                                                                                                                                                                                                                    </div>
-                                                                                                                                                                                                                                                                                                                            <form class="inventory-quick-add" data-item-id="${item.id}" hidden>
-                                                                                                                                                                                                                                                                                                                                      <input type="number" step="any" min="0" class="qa-quantity" placeholder="Menge" value="${prefillQty}" />
-                                                                                                    <select class="qa-unit">${unitOptionsHtml(prefillUnit || "Stück")}</select>
-        <button type="button" class="btn-ghost btn-tiny qa-remember-unit" title="Diese Einheit künftig immer für diese Zutat vorschlagen">📌</button>
-                                                                                                    <select class="qa-category">${categoryOptionsHtml(categorizeIngredient(item.name).key)}</select>
-                                                                                                    <select class="qa-storage">${storageLocationOptionsHtml(estimateStorageLocation(item.name))}</select>
-                                                                                                                                                                                                                                                                                                                                                          <input type="date" class="qa-expiry" title="Mindesthaltbarkeitsdatum (Pflicht)" required />
-<button type="button" class="btn-ghost expiry-estimate-btn qa-expiry-estimate" title="MHD schätzen">🤖</button>
-<button type="submit" class="btn btn-primary btn-small">Übernehmen</button>
-                                                                                                                                                                                                                                                                                                                                                                              <button type="button" class="btn btn-ghost btn-small qa-cancel">Abbrechen</button>
-                                                                                                                                                                                                                                                                                                                                                                                      </form>
-                                                                                                                                                                                                                                                                                                                                                                                            </li>
-                                                                                                                                                                                                                                                                                                                                                                                                `;
+    const noteHtml = item.note
+      ? `<div class="shopping-tile-note" title="${escapeHtml(item.note)}">📝 ${escapeHtml(item.note)}</div>`
+      : "";
+
+    return `
+      <li class="shopping-tile ${item.checked ? "shopping-tile--checked" : ""}" data-item-id="${item.id}">
+        <div class="shopping-tile-head">
+          <button
+            type="button" class="shopping-tile-checkbox ${item.checked ? "shopping-tile-checkbox--checked" : ""}"
+            data-item-id="${item.id}" aria-pressed="${item.checked ? "true" : "false"}"
+            title="${item.checked ? "Zurück auf die Liste" : "Abhaken"}"
+          >${item.checked ? "✓" : ""}</button>
+          <span class="shopping-tile-icon" title="${escapeHtml(cat.label)}">${cat.icon}</span>
+          <div class="shopping-tile-info">
+            <span class="shopping-tile-name">${escapeHtml(item.name)}</span>
+            ${qtyLabel ? `<span class="shopping-tile-qty">${qtyLabel}</span>` : ""}
+          </div>
+          <button type="button" class="shopping-tile-expand" data-item-id="${item.id}" title="Details ein-/ausblenden">⋯</button>
+        </div>
+        ${noteHtml}
+        <div class="shopping-tile-detail" hidden>
+          <div class="shopping-item-prices">
+            <label class="price-field price-field--planned" title="Geplanter Preis">
+              <input
+                type="number" step="0.01" min="0" class="price-input price-input--planned"
+                data-item-id="${item.id}" value="${item.plannedPrice ?? ""}" placeholder="geplant"
+              />
+              <span class="price-field-suffix">€</span>
+            </label>
+            ${item.plannedPrice === null ? `<button type="button" class="btn-ghost btn-tiny price-ai-btn" data-item-id="${item.id}" data-name="${escapeHtml(item.name)}" title="Preis per KI schätzen">🤖</button>` : ""}
+            ${actualPriceField}
+          </div>
+          <div class="shopping-item-actions">
+            ${toInventoryBtn}
+            <button type="button" class="btn-ghost btn-tiny item-note-btn" data-item-id="${item.id}" title="Alternativ-Artikel-Notiz">📝 Notiz</button>
+            <button type="button" class="btn-ghost btn-tiny item-link-synonym" data-item-id="${item.id}" title="Ist das eigentlich schon im Vorrat, nur anders benannt?">🔗</button>
+            <button class="row-remove shopping-item-remove" data-item-id="${item.id}" title="Entfernen" type="button">×</button>
+          </div>
+        </div>
+        <form class="inventory-quick-add" data-item-id="${item.id}" hidden>
+          <input type="number" step="any" min="0" class="qa-quantity" placeholder="Menge" value="${prefillQty}" />
+          <select class="qa-unit">${unitOptionsHtml(prefillUnit || "Stück")}</select>
+          <button type="button" class="btn-ghost btn-tiny qa-remember-unit" title="Diese Einheit künftig immer für diese Zutat vorschlagen">📌</button>
+          <select class="qa-category">${categoryOptionsHtml(categorizeIngredient(item.name).key)}</select>
+          <select class="qa-storage">${storageLocationOptionsHtml(estimateStorageLocation(item.name))}</select>
+          <input type="date" class="qa-expiry" title="Mindesthaltbarkeitsdatum (Pflicht)" required />
+          <button type="button" class="btn-ghost expiry-estimate-btn qa-expiry-estimate" title="MHD schätzen">🤖</button>
+          <button type="submit" class="btn btn-primary btn-small">Übernehmen</button>
+          <button type="button" class="btn btn-ghost btn-small qa-cancel">Abbrechen</button>
+        </form>
+      </li>
+    `;
   }
 
   function groupByCategory(items) {
-const groups = new Map();
-for (const item of items) {
-if (item.source === "receipt_spontaneous") continue;
-const cat = categorizeIngredient(item.name);
-if (!groups.has(cat.key)) groups.set(cat.key, { ...cat, items: [] });
-groups.get(cat.key).items.push(item);
-}
-return CATEGORY_ORDER.filter((key) => groups.has(key)).map((key) => groups.get(key));
-}
+    const groups = new Map();
+    for (const item of items) {
+      if (item.source === "receipt_spontaneous") continue;
+      if (item.checked) continue;
+      const cat = categorizeIngredient(item.name);
+      if (!groups.has(cat.key)) groups.set(cat.key, { ...cat, items: [] });
+      groups.get(cat.key).items.push(item);
+    }
+    return CATEGORY_ORDER.filter((key) => groups.has(key)).map((key) => groups.get(key));
+  }
 
-function spontaneousGroupHtml(items) {
-const spontaneousItems = items.filter((i) => i.source === "receipt_spontaneous");
-if (spontaneousItems.length === 0) return "";
-return `
-<section class="shopping-category shopping-category--spontaneous">
-<h2 class="shopping-category-header">
-<span class="shopping-category-icon">🎲</span>
-Spontankäufe
-<span class="shopping-category-count">${spontaneousItems.length}</span>
-</h2>
-<p class="text-muted text-small">Beim Kassenbon-Scan erkannt, standen aber nicht auf der Liste.</p>
-<ul class="shopping-category-items">
-${spontaneousItems.map(itemHtml).join("")}
-</ul>
-</section>
-`;
-}
+  function spontaneousGroupHtml(items) {
+    const spontaneousItems = items.filter((i) => i.source === "receipt_spontaneous" && !i.checked);
+    if (spontaneousItems.length === 0) return "";
+    return `
+      <section class="shopping-category shopping-category--spontaneous">
+        <h2 class="shopping-category-header">
+          <span class="shopping-category-icon">🎲</span>
+          Spontankäufe
+          <span class="shopping-category-count">${spontaneousItems.length}</span>
+        </h2>
+        <p class="text-muted text-small">Beim Kassenbon-Scan erkannt, standen aber nicht auf der Liste.</p>
+        <ul class="shopping-category-items shopping-tile-grid">
+          ${spontaneousItems.map(itemHtml).join("")}
+        </ul>
+      </section>
+    `;
+  }
 
   function groupHtml(group) {
-        return `
-              <section class="shopping-category">
-                      <h2 class="shopping-category-header">
-                                <span class="shopping-category-icon">${group.icon}</span>
-                                          ${escapeHtml(group.label)}
-                                                    <span class="shopping-category-count">${group.items.length}</span>
-                                                            </h2>
-                                                                    <ul class="shopping-category-items">
-                                                                              ${group.items.map(itemHtml).join("")}
-                                                                                      </ul>
-                                                                                            </section>
-                                                                                                `;
+    return `
+      <section class="shopping-category">
+        <h2 class="shopping-category-header">
+          <span class="shopping-category-icon">${group.icon}</span>
+          ${escapeHtml(group.label)}
+          <span class="shopping-category-count">${group.items.length}</span>
+        </h2>
+        <ul class="shopping-category-items shopping-tile-grid">
+          ${group.items.map(itemHtml).join("")}
+        </ul>
+      </section>
+    `;
+  }
+
+  function checkedGroupHtml(items) {
+    const checkedItems = items.filter((i) => i.checked);
+    if (checkedItems.length === 0) return "";
+    return `
+      <section class="shopping-category shopping-category--cart">
+        <h2 class="shopping-category-header">
+          <span class="shopping-category-icon">🛒</span>
+          Bereits im Einkaufswagen (${checkedItems.length})
+        </h2>
+        <ul class="shopping-category-items shopping-tile-grid">
+          ${checkedItems.map(itemHtml).join("")}
+        </ul>
+      </section>
+    `;
   }
 
   function wireItems() {
-        list.querySelectorAll(".shopping-item-checkbox").forEach((cb) => {
-                cb.addEventListener("change", async () => {
-                          try {
-                                      await toggleShoppingListItem(cb.dataset.itemId, cb.checked);
-                                      await load();
-                          } catch (err) {
-                                      alert("Konnte nicht speichern: " + err.message);
-                          }
-                });
-        });
-        list.querySelectorAll(".shopping-item-remove").forEach((btn) => {
-                btn.addEventListener("click", async () => {
-                          btn.disabled = true;
-                          try {
-                                      await deleteShoppingListItem(btn.dataset.itemId);
-                                      await load();
-                          } catch (err) {
-                                      alert("Konnte nicht entfernen: " + err.message);
-                                      btn.disabled = false;
-                          }
-                });
-        });
-        list.querySelectorAll(".price-input--planned").forEach((priceEl) => {
+        list.querySelectorAll(".shopping-tile-checkbox").forEach((cb) => {
+      cb.addEventListener("click", async () => {
+        const id = cb.dataset.itemId;
+        const item = currentItems.find((i) => i.id === id);
+        if (!item) return;
+        const previousChecked = item.checked;
+        item.checked = !previousChecked;
+        // Optimistisches Update: Liste sofort lokal (ohne Netzwerk-Reload) neu aufbauen,
+        // damit kein Sprung der Scroll-Position entsteht. Der Supabase-Call laeuft im
+        // Hintergrund; schlaegt er fehl, wird der lokale Zustand zurueckgerollt.
+        renderList();
+        try {
+          await toggleShoppingListItem(id, item.checked);
+        } catch (err) {
+          item.checked = previousChecked;
+          renderList();
+          alert("Konnte nicht speichern: " + err.message);
+        }
+      });
+    });
+    list.querySelectorAll(".shopping-tile-expand").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const tile = btn.closest(".shopping-tile");
+        if (!tile) return;
+        const detail = tile.querySelector(".shopping-tile-detail");
+        detail.hidden = !detail.hidden;
+        tile.classList.toggle("shopping-tile--expanded", !detail.hidden);
+      });
+    });
+    list.querySelectorAll(".item-note-btn").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const id = btn.dataset.itemId;
+        const item = currentItems.find((i) => i.id === id);
+        if (!item) return;
+        const next = prompt(
+          'Alternativ-Artikel-Notiz (z. B. "Fusilli statt Spaghetti gekauft"):',
+          item.note || ""
+        );
+        if (next === null) return;
+        const trimmed = next.trim();
+        try {
+          await updateShoppingListItemNote(id, trimmed === "" ? null : trimmed);
+          item.note = trimmed === "" ? null : trimmed;
+          renderList();
+        } catch (err) {
+          alert("Notiz konnte nicht gespeichert werden: " + err.message);
+        }
+      });
+    });
+    list.querySelectorAll(".shopping-item-remove").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const id = btn.dataset.itemId;
+        btn.disabled = true;
+        const idx = currentItems.findIndex((i) => i.id === id);
+        const removed = idx >= 0 ? currentItems.splice(idx, 1)[0] : null;
+        renderList();
+        try {
+          await deleteShoppingListItem(id);
+        } catch (err) {
+          if (removed) currentItems.splice(idx, 0, removed);
+          renderList();
+          alert("Konnte nicht entfernen: " + err.message);
+        }
+      });
+    });
+    list.querySelectorAll(".price-input--planned").forEach((priceEl) => {
                 priceEl.addEventListener("change", async () => {
                           const value = priceEl.value.trim();
                           try {
@@ -414,31 +485,36 @@ return;
             summaryActualEl.textContent = actualSum > 0 ? `bereits bezahlt: ${formatPrice(actualSum)} €` : "";
 }
 
+  function renderList() {
+    const items = currentItems;
+    const openCount = items.filter((i) => !i.checked).length;
+    const checkedCount = items.length - openCount;
+    countEl.textContent = items.length ? `${openCount} offen von ${items.length}` : "";
+    emptyState.hidden = items.length > 0;
+    moveCheckedBtn.disabled = checkedCount === 0;
+    clearCheckedBtn.disabled = checkedCount === 0;
+    clearAllBtn.disabled = items.length === 0;
+    updateCostSummary(items);
+
+    const groups = groupByCategory(items);
+    list.innerHTML = spontaneousGroupHtml(items) + groups.map(groupHtml).join("") + checkedGroupHtml(items);
+    wireItems();
+  }
+
   async function load() {
-        list.innerHTML = `<p class="text-muted">Lade…</p>`;
-        let items = [];
-        try {
-                items = await listShoppingListItems();
-        } catch (err) {
-                list.innerHTML = `<p class="form-error">Liste konnte nicht geladen werden: ${escapeHtml(
-                          err.message
-                        )}</p>`;
-                return;
-        }
+    list.innerHTML = `<p class="text-muted">Lade…</p>`;
+    let items = [];
+    try {
+      items = await listShoppingListItems();
+    } catch (err) {
+      list.innerHTML = `<p class="form-error">Liste konnte nicht geladen werden: ${escapeHtml(
+        err.message
+      )}</p>`;
+      return;
+    }
 
-      currentItems = items;
-        const openCount = items.filter((i) => !i.checked).length;
-        const checkedCount = items.length - openCount;
-        countEl.textContent = items.length ? `${openCount} offen von ${items.length}` : "";
-        emptyState.hidden = items.length > 0;
-        moveCheckedBtn.disabled = checkedCount === 0;
-        clearCheckedBtn.disabled = checkedCount === 0;
-clearAllBtn.disabled = items.length === 0;
-        updateCostSummary(items);
-
-      const groups = groupByCategory(items);
-        list.innerHTML = spontaneousGroupHtml(items) + groups.map(groupHtml).join("");
-        wireItems();
+    currentItems = items;
+    renderList();
   }
 
   form.addEventListener("submit", async (e) => {
