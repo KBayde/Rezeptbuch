@@ -1,7 +1,7 @@
 // Sehr einfacher Service Worker: cached nur die App-Huelle (HTML/CSS/JS),
 // damit die App auch bei wackligem Netz schnell startet. Rezeptdaten selbst
 // kommen immer live von Supabase (kein Offline-Datenzugriff in Phase 1).
-const CACHE_NAME = "clevulo-shell-v41";
+const CACHE_NAME = "clevulo-shell-v42";
 const SHELL_FILES = [
   "./",
   "./index.html",
@@ -29,6 +29,7 @@ const SHELL_FILES = [
   "./settings.js",
   "./manifest.json",
   "./logo-mascot.png",
+  "./mascot-illustration.png",
   ];
 
 self.addEventListener("install", (event) => {
