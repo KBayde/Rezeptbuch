@@ -214,7 +214,7 @@ step="0.01" min="0" placeholder="€ bezahlt"
                                                                                                                                                                   </div>
                                                                                                                                                                   
                                                                                                                                                                   <div id="shopping-items" class="shopping-list"></div>
-                                                                                                              <p id="shopping-empty" class="empty-state" hidden>Deine Einkaufsliste ist leer.</p>
+                                                                                                              <div id="shopping-empty" class="empty-state" hidden><img src="./mascot-illustration.png" alt="Bevo der Biber" class="empty-state-mascot" /><p>Deine Einkaufsliste ist leer.</p></div>
 
 <div class="card stack-md" id="bulk-inventory-review" hidden>
 <h2>In den Vorrat übernehmen</h2>
