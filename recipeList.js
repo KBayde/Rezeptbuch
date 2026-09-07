@@ -45,7 +45,7 @@ export async function renderRecipeList(container) {
     </div>
                                                                                                                                                                                 
                                                                                                                                                                                     <div id="recipe-grid" class="recipe-grid"></div>
-                                                                                                                                                                                        <p id="empty-state" class="empty-state" hidden>Keine Rezepte gefunden.</p>
+                                                                                                                                                                                        <div id="empty-state" class="empty-state" hidden><img src="./mascot-illustration.png" alt="Bevo der Biber" class="empty-state-mascot" /><p>Keine Rezepte gefunden.</p></div>
                                                                                                                                                                                           `;
 
   const grid = container.querySelector("#recipe-grid");
