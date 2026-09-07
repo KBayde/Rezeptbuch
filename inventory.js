@@ -62,7 +62,7 @@ export async function renderInventory(container) {
     <div id="inventory-soon-wrap"></div>
 
     <ul id="inventory-items" class="inventory-list"></ul>
-    <p id="inventory-empty" class="empty-state" hidden>Dein Vorrat ist leer.</p>
+    <div id="inventory-empty" class="empty-state" hidden><img src="./mascot-illustration.png" alt="Bevo der Biber" class="empty-state-mascot" /><p>Dein Vorrat ist leer.</p></div>
 
     <div class="modal-overlay" id="inv-add-modal" hidden>
       <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="inv-add-modal-title">
