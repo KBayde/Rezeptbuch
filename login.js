@@ -7,7 +7,7 @@ export function renderLogin(container) {
       <div class="auth-card">
         <div class="auth-brand">
           <img src="./logo-mascot.png" alt="" class="auth-brand-mark" />
-          <h1>CookCook</h1>
+          <h1>Clevulo</h1>
           <p class="text-muted">Melde dich an, um eure Sammlung zu öffnen.</p>
         </div>
         <form id="login-form" class="stack-md">
