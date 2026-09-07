@@ -1,7 +1,7 @@
 /* ============================================================================
-   Design-System: CookCook Markenpalette (Terracotta, Cream White, Sage
-   Green, Coffee Brown, Honey Gold). Serifen-Display-Font für Titel
-   (Fraunces), klare Sans-Serif für UI-Text (Inter).
+   Design-System: Clevulo Markenpalette (Terracotta, Cream White, Sage
+   Green, Coffee Brown, Honey Gold). Runde Display-Font fuer Titel
+   (Fredoka), klare Sans-Serif fuer UI-Text (Inter).
    ============================================================================ */
 
 :root {
@@ -28,7 +28,7 @@
   --radius-sm: 8px;
   --radius-md: 14px;
   --radius-lg: 22px;
-  --font-display: "Fraunces", Georgia, serif;
+  --font-display: "Fredoka", "Fraunces", Georgia, sans-serif;
   --font-body: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
@@ -2546,4 +2546,15 @@ flex-shrink: 0;
 font-size: 0.75rem;
 line-height: 1;
 margin-left: 0.15rem;
+}
+
+
+/* ------------------------------ Leere Zustaende: Biber-Maskottchen ------------------------------ */
+
+.empty-state-mascot {
+  display: block;
+  max-width: 180px;
+  width: 60%;
+  height: auto;
+  margin: 0 auto 1rem;
 }
