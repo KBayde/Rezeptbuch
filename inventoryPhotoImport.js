@@ -38,7 +38,7 @@ bevor es in den Vorrat übernommen wird.
 <div class="card stack-md" id="inv-photo-upload-card">
 <label class="field">
 <span>Foto(s) auswählen (bis zu ${MAX_IMAGES})</span>
-<input type="file" id="inv-photo-input" accept="image/*" capture="environment" multiple />
+<input type="file" id="inv-photo-input" accept="image/*" multiple />
 </label>
 <div id="inv-photo-thumbs" class="photo-thumbs"></div>
 <button type="button" id="inv-photo-scan-btn" class="btn btn-primary" disabled>Lebensmittel erkennen</button>
