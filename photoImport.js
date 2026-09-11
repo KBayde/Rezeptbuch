@@ -42,7 +42,7 @@ export async function renderPhotoImport(container) {
     <div class="card stack-md">
       <label class="field">
         <span>Fotos auswählen (bis zu ${MAX_IMAGES})</span>
-        <input type="file" id="photo-input" accept="image/*" capture="environment" multiple />
+        <input type="file" id="photo-input" accept="image/*" multiple />
       </label>
       <div id="photo-thumbs" class="photo-thumbs"></div>
       <button type="button" id="analyze-btn" class="btn btn-primary" disabled>Rezept erkennen</button>
