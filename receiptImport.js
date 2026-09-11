@@ -53,7 +53,7 @@ export async function renderReceiptImport(container) {
                                           <div class="card stack-md" id="receipt-upload-card">
                                                 <label class="field">
                                                         <span>Kassenbon-Foto(s) auswählen (bis zu ${MAX_IMAGES})</span>
-                                                                <input type="file" id="receipt-input" accept="image/*" capture="environment" multiple />
+                                                                <input type="file" id="receipt-input" accept="image/*" multiple />
                                                                       </label>
                                                                             <div id="receipt-thumbs" class="photo-thumbs"></div>
                                                                                   <button type="button" id="scan-btn" class="btn btn-primary" disabled>Kassenbon erkennen</button>
